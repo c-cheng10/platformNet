@@ -7,8 +7,8 @@
   network inputs (keys pressed, x, y, vx, vy, level tiles). No stored `grounded` (derived from position + tiles,
   since collisions snap to exact contact), no timers, no randomness. Tested by recomputing every logged frame
   in shuffled order from a level rebuilt from the logged tiles alone.
-- Movement: holding a direction → top speed 3.3 px/tick; release on ground → stops in a few ticks;
-  release in air → keeps momentum, bleeds 5%/tick (holding keeps full speed). Jump apex ~78 px (gravity 0.6), fixed. Fall cap 15 px/tick, swept collision (no tunnelling).
+- Movement: on the ground, each material has a friction coefficient μ (`FRICTION` in physics.py, solid = 1.0); vx moves toward ±3.3 px/tick by at most μ × 0.5 per tick (speeding up and slowing down). In the air, air resistance removes 5% of vx per tick; holding a direction balances it at 3.3.
+  release in air → keeps momentum, bleeds 5%/tick (holding keeps full speed). Jump apex ~55 px (gravity 0.6, jump −8.4), fixed. Fall cap 15 px/tick, swept collision (no tunnelling).
 - Pure `step(state, action, level)` in `platformnet/physics.py`, no Pygame.
 - One level, `levels/level1.txt` (500×500 px, 5 px tiles): step, spike pit, platform, thin wall, spikes, exit.
 - `python game.py` → keyboard play, no timer/death HUD. Every tick logged to `data/human/ep_NNNNNN.npz`:

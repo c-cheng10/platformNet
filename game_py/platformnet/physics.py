@@ -18,14 +18,21 @@ Units: pixels and pixels/tick at a fixed 60 ticks/s. (x, y) is the player's
 top-left, y points down. The level is 100x100 tiles of 5 px (500x500 screen).
 
 Horizontal movement, per tick:
-    holding a direction:     vx = (vx + dir * ACCEL) * MOVE_DAMP   -> top speed ~3.3 px/tick
-    no input, on the ground: vx *= GROUND_FRICTION                  -> stops in a few ticks
-    no input, in the air:    vx *= AIR_DRAG                         -> momentum carries, slowly bleeds off
+  On the ground, the surface's friction coefficient mu (FRICTION[material]) is
+  your grip. It sets how fast you can change speed, both speeding up and slowing down:
+      vx moves toward dir * MAX_RUN by at most mu * GROUND_ACCEL
+  So releasing the keys decelerates you at mu * GROUND_ACCEL px/tick^2 until you
+  stop, and a low-mu surface (e.g. ice) is slow to start, slow to stop, slow to turn.
+  Standing across two materials uses the average mu of the tiles under you.
+  In the air there is no grip, only air resistance proportional to speed:
+      vx -= AIR_RESISTANCE * vx;  vx += dir * AIR_ACCEL
+  Holding a direction balances out at AIR_ACCEL / AIR_RESISTANCE = MAX_RUN, so you
+  keep running speed; letting go loses AIR_RESISTANCE (5%) of vx per tick.
 """
 from math import ceil, floor
 
 # Bump whenever constants or rules change: data recorded before is under different physics.
-PHYSICS_VERSION = 5
+PHYSICS_VERSION = 6
 
 TICK_HZ = 60
 TILE = 5
@@ -33,43 +40,62 @@ PLAYER = 10
 GRID_W = 100
 GRID_H = 100
 
-ACCEL = 1.1            # added per tick while a direction is held
-MOVE_DAMP = 0.75       # multiplier while a direction is held; top speed = ACCEL*MOVE_DAMP/(1-MOVE_DAMP) = 3.3
-GROUND_FRICTION = 0.6  # multiplier on the ground with no input (quick stop)
-AIR_DRAG = 0.95        # multiplier in the air with no input (keeps most momentum)
+MAX_RUN = 3.3          # top running speed, px/tick
+GROUND_ACCEL = 0.5     # max change in vx per tick on a surface with mu = 1.0
+AIR_RESISTANCE = 0.05  # fraction of vx lost per tick in the air
+AIR_ACCEL = AIR_RESISTANCE * MAX_RUN  # air push while holding; balances drag at MAX_RUN
 GRAVITY = 0.6          # added to vy every tick
 MAX_FALL = 15.0        # vy cap (collision is swept, so no tunnelling at this speed)
-JUMP_VEL = -10.0       # vy set when jumping from the ground -> apex ~79 px, always the same
+JUMP_VEL = -8.4        # vy set when jumping from the ground -> apex ~55 px, always the same
 VX_EPS = 0.01          # |vx| below this snaps to 0, so the player fully stops
 
 # Tile codes
 EMPTY, SOLID, EXIT, SPIKE = range(4)
+
+# Friction coefficient (grip) of each ground material. Add a material = add a tile code + an entry.
+FRICTION = {SOLID: 1.0}
 
 STATE_DIM = 4
 X, Y, VX, VY = range(STATE_DIM)
 STATE_NAMES = ("x", "y", "vx", "vy")
 
 
-def is_grounded(x, y, level):
-    """Standing exactly on a solid tile. Derived from position + tiles, never stored."""
+def ground_friction(x, y, level):
+    """Average friction coefficient of the ground under the player, or None if in the air.
+    Derived from position + tiles every tick, never stored (collisions snap to exact contact)."""
     bottom = y + PLAYER
     if bottom % TILE != 0:
-        return False
+        return None
     r = int(bottom // TILE)
-    return any(level.tile(c, r) == SOLID
-               for c in range(floor(x / TILE), ceil((x + PLAYER) / TILE)))
+    mus = [FRICTION[t] for c in range(floor(x / TILE), ceil((x + PLAYER) / TILE))
+           if (t := level.tile(c, r)) in FRICTION]
+    return sum(mus) / len(mus) if mus else None
+
+
+def is_grounded(x, y, level):
+    return ground_friction(x, y, level) is not None
+
+
+def move_toward(v, target, delta):
+    if v < target:
+        return min(v + delta, target)
+    if v > target:
+        return max(v - delta, target)
+    return v
 
 
 def step(state, action, level):
     """Advance one tick. `level` needs .tile(col, row) -> tile code."""
     x, y, vx, vy = state
     input_dir, jump = action
-    grounded = is_grounded(x, y, level)
+    mu = ground_friction(x, y, level)
+    grounded = mu is not None
 
-    if input_dir != 0:
-        vx = (vx + input_dir * ACCEL) * MOVE_DAMP
+    if grounded:
+        vx = move_toward(vx, input_dir * MAX_RUN, mu * GROUND_ACCEL)
     else:
-        vx *= GROUND_FRICTION if grounded else AIR_DRAG
+        vx -= AIR_RESISTANCE * vx
+        vx += input_dir * AIR_ACCEL
     if -VX_EPS < vx < VX_EPS:
         vx = 0.0
 
