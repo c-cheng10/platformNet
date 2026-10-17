@@ -86,9 +86,9 @@ def _level_like(m, rng):
                 m[:, GRID_W - t:] = SOLID
             else:
                 m[:t, :] = SOLID
-    # platforms: thin and wide
+    # platforms: thin, from 1 tile wide up to 35
     for _ in range(rng.integers(6, 30)):
-        _stamp(m, rng, _logsize(rng, 2, 35), int(rng.integers(1, 4)), SOLID)
+        _stamp(m, rng, _logsize(rng, 1, 35), int(rng.integers(1, 4)), SOLID)
     # walls and pillars: thin and tall
     for _ in range(rng.integers(2, 12)):
         _stamp(m, rng, int(rng.integers(1, 4)), _logsize(rng, 3, 50), SOLID)
