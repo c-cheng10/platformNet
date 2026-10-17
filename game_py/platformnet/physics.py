@@ -25,7 +25,7 @@ Horizontal movement, per tick:
 from math import ceil, floor
 
 # Bump whenever constants or rules change: data recorded before is under different physics.
-PHYSICS_VERSION = 4
+PHYSICS_VERSION = 5
 
 TICK_HZ = 60
 TILE = 5
@@ -37,9 +37,9 @@ ACCEL = 1.1            # added per tick while a direction is held
 MOVE_DAMP = 0.75       # multiplier while a direction is held; top speed = ACCEL*MOVE_DAMP/(1-MOVE_DAMP) = 3.3
 GROUND_FRICTION = 0.6  # multiplier on the ground with no input (quick stop)
 AIR_DRAG = 0.95        # multiplier in the air with no input (keeps most momentum)
-GRAVITY = 0.85         # added to vy every tick
+GRAVITY = 0.6          # added to vy every tick
 MAX_FALL = 15.0        # vy cap (collision is swept, so no tunnelling at this speed)
-JUMP_VEL = -10.0       # vy set when jumping from the ground -> apex ~55 px, always the same
+JUMP_VEL = -10.0       # vy set when jumping from the ground -> apex ~79 px, always the same
 VX_EPS = 0.01          # |vx| below this snaps to 0, so the player fully stops
 
 # Tile codes

@@ -76,7 +76,7 @@ def test_jump_is_fixed_height():
             s = step(s, (0, 1 if t < hold and s[1] < GROUND else 0), lv)
             top = min(top, s[1])
         apexes.append(GROUND - top)
-    assert apexes[0] == apexes[1] == apexes[2] and 50 < apexes[0] < 62  # ~55 px
+    assert apexes[0] == apexes[1] == apexes[2] and 70 < apexes[0] < 85  # ~79 px
     assert JUMP_VEL == -10.0
 
 

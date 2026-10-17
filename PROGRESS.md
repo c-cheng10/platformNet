@@ -8,7 +8,7 @@
   since collisions snap to exact contact), no timers, no randomness. Tested by recomputing every logged frame
   in shuffled order from a level rebuilt from the logged tiles alone.
 - Movement: holding a direction → top speed 3.3 px/tick; release on ground → stops in a few ticks;
-  release in air → keeps momentum, bleeds 5%/tick (holding keeps full speed). Jump apex ~55 px, fixed. Fall cap 15 px/tick, swept collision (no tunnelling).
+  release in air → keeps momentum, bleeds 5%/tick (holding keeps full speed). Jump apex ~78 px (gravity 0.6), fixed. Fall cap 15 px/tick, swept collision (no tunnelling).
 - Pure `step(state, action, level)` in `platformnet/physics.py`, no Pygame.
 - One level, `levels/level1.txt` (500×500 px, 5 px tiles): step, spike pit, platform, thin wall, spikes, exit.
 - `python game.py` → keyboard play, no timer/death HUD. Every tick logged to `data/human/ep_NNNNNN.npz`:

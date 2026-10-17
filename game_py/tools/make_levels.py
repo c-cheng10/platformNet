@@ -2,7 +2,7 @@
 
 levels/level1.txt is the source of truth. Re-running this overwrites hand edits.
 Coordinates are tile (col, row), inclusive, 100x100 grid of 5px tiles, row 0 at top.
-Physics reference (60 ticks/s): jump apex ~55 px (~11 tiles), top speed 3.3 px/tick, jump covers ~80 px
+Physics reference (60 ticks/s): jump apex ~78 px (~16 tiles), top speed 3.3 px/tick, jump covers ~80 px
 horizontally at full speed, player 2x2 tiles.
 """
 from pathlib import Path
