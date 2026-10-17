@@ -8,16 +8,16 @@ LEVELS_DIR = Path(__file__).resolve().parents[1] / "levels"
 # Initialize Pygame
 pygame.init()
 
-# --- Configuration ---
+### CONFIGURATION ###
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 1000
-TILE_SIZE = 10 # 100x100 grid fits a 500x500 screen perfectly
+TILE_SIZE = 10 # Should be SCREEN_WIDTH/100
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Platformer Renderer")
 clock = pygame.time.Clock()
 
-# --- Colors ---
+### COLORS ###
 COLOR_BG = (20, 20, 30)         # Empty space (.)
 COLOR_GROUND = (70, 130, 180)   # Ground blocks (#)
 COLOR_START = (46, 204, 113)    # Start position (S)
@@ -87,7 +87,7 @@ def get_next_frame(right_pressed, left_pressed, up_pressed, position, velocity, 
     
     return new_pos, new_vel, is_dead, is_finished
 
-# --- Main Game Loop ---
+### MAIN LOOP ###
 def main():
     current_level = 1
     LEVEL_DATA, level_grid = load_level(current_level)
