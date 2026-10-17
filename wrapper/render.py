@@ -1,13 +1,17 @@
 import pygame
 import sys
+import os
+from pathlib import Path
+
+LEVELS_DIR = Path(__file__).resolve().parents[1] / "levels"
 
 # Initialize Pygame
 pygame.init()
 
 # --- Configuration ---
-SCREEN_WIDTH = 500
-SCREEN_HEIGHT = 500
-TILE_SIZE = 5  # 100x100 grid fits a 500x500 screen perfectly
+SCREEN_WIDTH = 1000
+SCREEN_HEIGHT = 1000
+TILE_SIZE = 10 # 100x100 grid fits a 500x500 screen perfectly
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Platformer Renderer")
@@ -21,14 +25,17 @@ COLOR_EXIT = (241, 196, 15)     # Exit (E)
 COLOR_SPIKE = (231, 76, 60)     # Spike (X)
 COLOR_PLAYER = (255, 255, 255)  # Player visual
 
-# --- Level Data ---
-with open("levels/level1.txt", "r") as f:
-    LEVEL_DATA = f.read()
-
-# Parse level grid
-level_grid = [list(row) for row in LEVEL_DATA.strip().splitlines()]
-LEVEL_HEIGHT = len(level_grid)
-LEVEL_WIDTH = len(level_grid[0]) if LEVEL_HEIGHT > 0 else 0
+def load_level(level_num):
+    """Loads level data from a file based on level number."""
+    filepath = LEVELS_DIR / f"level{level_num}.txt"
+    if not os.path.exists(filepath):
+        return None, None
+    
+    with open(filepath, "r") as f:
+        level_data = f.read()
+        
+    level_grid = [list(row) for row in level_data.strip().splitlines()]
+    return level_data, level_grid
 
 def get_start_position(grid):
     """Finds the 'S' starting tile coordinates."""
@@ -56,19 +63,39 @@ def render_level(surface, grid):
 
 def render_player(surface, pos):
     """Renders the player on screen."""
-    player_rect = pygame.Rect(int(pos[0]), int(pos[1]), TILE_SIZE, TILE_SIZE)
+    player_rect = pygame.Rect(int(pos[0]), int(pos[1]), 2*TILE_SIZE, 2*TILE_SIZE)
     pygame.draw.rect(surface, COLOR_PLAYER, player_rect)
 
-# --- Your Physics Function ---
+def get_next_frame_raw(data):
+    return {}
+
 def get_next_frame(right_pressed, left_pressed, up_pressed, position, velocity, level):
-    new_pos = position
-    new_vel = velocity
-    is_dead = False
+    data = get_next_frame_raw({
+                           "shouldRight": 0,
+                           "shouldLeft": 0,
+                           "wantsJump": 1,
+                           "LEVEL": level,
+                           "prevposx": position[0],
+                           "prevposy": position[1],
+                           "prevvelx": velocity[0],
+                           "prevvely": velocity[1],
+                       })
+    new_pos = (data.get("posx", position[0]), data.get("posy", position[1]))
+    new_vel = (data.get("velx", velocity[0]), data.get("vely", velocity[1]))
+    is_dead = bool(data.get("isDead", False))
+    is_finished = bool(data.get("isFinished", False))
     
-    return new_pos, new_vel, is_dead
+    return new_pos, new_vel, is_dead, is_finished
 
 # --- Main Game Loop ---
 def main():
+    current_level = 1
+    LEVEL_DATA, level_grid = load_level(current_level)
+    
+    if not LEVEL_DATA:
+        print(f"Error: Could not find levels/level{current_level}.txt")
+        sys.exit()
+
     start_pos = get_start_position(level_grid)
     player_pos = list(start_pos)
     player_vel = [0.0, 0.0]
@@ -87,11 +114,11 @@ def main():
         up_pressed = keys[pygame.K_UP]
 
         # 4 & 5. Pass inputs, position, and velocity into get_next_frame
-        player_pos, player_vel, is_dead = get_next_frame(
-            right_pressed, 
-            left_pressed, 
-            up_pressed, 
-            player_pos, 
+        player_pos, player_vel, is_dead, is_finished = get_next_frame(
+            right_pressed,
+            left_pressed,
+            up_pressed,
+            player_pos,
             player_vel,
             LEVEL_DATA,
         )
@@ -101,12 +128,34 @@ def main():
             player_pos = list(start_pos)
             player_vel = [0.0, 0.0]
 
+        # Handle level completion / loading the next level
+        if is_finished:
+            print(f"Level {current_level} Complete!")
+            current_level += 1
+            next_data, next_grid = load_level(current_level)
+            
+            if next_data:
+                # Load next level successfully
+                LEVEL_DATA = next_data
+                level_grid = next_grid
+                start_pos = get_start_position(level_grid)
+                player_pos = list(start_pos)
+                player_vel = [0.0, 0.0]
+                print(f"Loading Level {current_level}...")
+            else:
+                print("You beat all the levels! Restarting game from Level 1.")
+                current_level = 1
+                LEVEL_DATA, level_grid = load_level(current_level)
+                start_pos = get_start_position(level_grid)
+                player_pos = list(start_pos)
+                player_vel = [0.0, 0.0]
+
         # Rendering
         render_level(screen, level_grid)
         render_player(screen, player_pos)
 
         pygame.display.flip()
-        clock.tick(60)
+        clock.tick(30)
 
 if __name__ == "__main__":
     main()

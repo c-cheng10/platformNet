@@ -1,6 +1,6 @@
 """Record human play as JSON input -> output pairs, one file per run.
 
-    python gamerecorder.py [level file]   play (same controls as game.py) and record
+    python gamerecorder.py [level]   play (same controls as game.py) and record
 
 Every frame becomes one pair. The input is frame 1: the keys pressed and the state the player was in.
 The output is frame 2: the state the player is actually in on the next frame (the spawn point after
@@ -15,7 +15,7 @@ import sys
 import time
 from pathlib import Path
 
-from platformnet.level import LEVEL_PATH
+from platformnet.level import LEVEL_PATH, resolve_level
 
 RECORDINGS_DIR = Path(__file__).resolve().parent / "recordings"
 
@@ -47,7 +47,7 @@ def make_pair(level_text, state, action, next_state, dead, finished):
 
 class GameRecorder:
     def __init__(self, level_path=LEVEL_PATH, out_dir=RECORDINGS_DIR):
-        self.level_text = Path(level_path).read_text()
+        self.level_text = resolve_level(level_path).read_text()
         self.out_dir = Path(out_dir)
         self.pairs = []
 
