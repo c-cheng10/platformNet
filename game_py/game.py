@@ -1,19 +1,16 @@
-"""Play the real engine with the keyboard. Nothing is recorded unless you pass --log.
+"""Play the game with the keyboard.
 
     Left/Right or A/D   move          Up / Space / W   jump (fixed height; hold to hop again on landing)
     R   restart
     Esc   quit
 
 Physics runs exactly one fixed tick per rendered frame at 60 Hz, never variable dt.
-Usage: python game.py [--log]   (--log saves every tick to data/human/ as training data)
 """
-import argparse
 from pathlib import Path
 
 import pygame
 
 from platformnet.level import load_level
-from platformnet.logger import DATA_DIR, EpisodeLogger
 from platformnet.physics import EXIT, GRID_H, GRID_W, PLAYER, SOLID, SPIKE, TICK_HZ, TILE
 from platformnet.run import advance, spawn_state
 
@@ -42,10 +39,6 @@ def read_action(keys):
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--log", action="store_true", help="record every tick to data/human/")
-    args = ap.parse_args()
-
     level = load_level()
     pygame.init()
     screen = pygame.display.set_mode(SCREEN)
@@ -57,54 +50,27 @@ def main():
     spike_img = pygame.transform.smoothscale(pygame.image.load(ASSETS / "spike.png").convert_alpha(), (TILE, TILE))
     background = render_level(level, spike_img)
 
-    log = EpisodeLogger(DATA_DIR / "human", "human", level) if args.log else None
-    last_saved = ""
-
-    def save(finished=False):
-        nonlocal last_saved
-        if log and (p := log.save(finished)):
-            last_saved = p.name
-
-    def restart():
-        s = spawn_state(level)
-        if log:
-            log.begin(s)
-        return s, False
-
-    state, finished = restart()
+    state, finished = spawn_state(level), False
     running = True
     while running:
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT or (ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE):
                 running = False
             elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_r:
-                save()
-                state, finished = restart()
+                state, finished = spawn_state(level), False
 
         if not finished:
             action = read_action(pygame.key.get_pressed())
-            ns, dead, nstate, reached_exit = advance(state, action, level)
-            if log:
-                log.record(state, action, ns, dead)
-            state = nstate
-            if reached_exit:
-                finished = True
-                save(finished=True)
+            _, _, state, finished = advance(state, action, level)
 
         screen.blit(background, (0, 0))
         screen.blit(player_img, (round(state[0]), round(state[1])))
-        if log:
-            screen.blit(font.render(f"REC {len(log)}", True, COLORS["hud"]), (6, 4))
-        if last_saved:
-            screen.blit(font.render(f"saved {last_saved}", True, COLORS["hud"]), (6, 20))
         if finished:
             msg = font.render("FINISHED - R to run again", True, COLORS["hud"])
             screen.blit(msg, msg.get_rect(center=(SCREEN[0] // 2, SCREEN[1] // 2)))
         pygame.display.flip()
         clock.tick(TICK_HZ)
 
-    if not finished:
-        save()
     pygame.quit()
 
 

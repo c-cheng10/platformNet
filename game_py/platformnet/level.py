@@ -5,7 +5,6 @@
 
 Lines starting with ';' are comments. Anything outside the grid counts as solid.
 """
-import hashlib
 from pathlib import Path
 
 from .physics import EMPTY, EXIT, GRID_H, GRID_W, PLAYER, SOLID, SPIKE, TILE
@@ -19,8 +18,6 @@ class Level:
     def __init__(self, rows, spawn):
         self.rows = rows  # GRID_H tuples of tile codes
         self.spawn = spawn  # (x, y) pixels, player's top-left
-        # Spawn is part of the fingerprint: respawns teleport there, so moving it changes replays.
-        self.hash = hashlib.sha1(repr((rows, spawn)).encode()).hexdigest()[:12]
 
     def tile(self, c, r):
         if 0 <= c < GRID_W and 0 <= r < GRID_H:
