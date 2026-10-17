@@ -1,10 +1,10 @@
 """Play the real engine with the keyboard. Every tick is logged to data/human/.
 
-    Left/Right or A/D   move          Up / Space / W   jump (hold to hop on landing, like the Java game)
+    Left/Right or A/D   move          Up / Space / W   jump (fixed height; hold to hop again on landing)
     R   restart (saves the episode, starts a new one)
     Esc   quit (saves)
 
-Physics runs exactly one fixed tick per rendered frame at 100 Hz, never variable dt.
+Physics runs exactly one fixed tick per rendered frame at 60 Hz, never variable dt.
 Usage: python game.py [--no-log]
 """
 import argparse
@@ -15,7 +15,7 @@ import pygame
 from platformnet.level import load_level
 from platformnet.logger import DATA_DIR, EpisodeLogger
 from platformnet.physics import EXIT, GRID_H, GRID_W, PLAYER, SOLID, SPIKE, TICK_HZ, TILE
-from platformnet.run import EV_FINISH, advance, spawn_state
+from platformnet.run import advance, spawn_state
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 SCREEN = (GRID_W * TILE, GRID_H * TILE)  # 500 x 500
@@ -57,7 +57,7 @@ def main():
     spike_img = pygame.transform.smoothscale(pygame.image.load(ASSETS / "spike.png").convert_alpha(), (TILE, TILE))
     background = render_level(level, spike_img)
 
-    log = None if args.no_log else EpisodeLogger(DATA_DIR / "human", "human", level.hash)
+    log = None if args.no_log else EpisodeLogger(DATA_DIR / "human", "human", level)
     last_saved = ""
 
     def save(finished=False):
@@ -83,11 +83,11 @@ def main():
 
         if not finished:
             action = read_action(pygame.key.get_pressed())
-            ns, nstate, event = advance(state, action, level)
+            ns, dead, nstate, reached_exit = advance(state, action, level)
             if log:
-                log.record(state, action, ns, event)
+                log.record(state, action, ns, dead)
             state = nstate
-            if event == EV_FINISH:
+            if reached_exit:
                 finished = True
                 save(finished=True)
 

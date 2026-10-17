@@ -1,21 +1,19 @@
 # PROGRESS
 
 ## What works (milestone 1: real engine + frame logger)
-- `game_py/`: Python port of the Java game's physics (`game/Game.java`). Kept deliberately minimal:
-  acceleration, friction, fixed-height jump, gravity/falling, solid collision, and a kill block (spike).
-  Based on Java (friction ×0.85, gravity 0.3, hold-to-hop, 100 ticks/s) but slower and lower: accel 0.35 (Java 0.7), jump −6 (Java −8). Fixes for the neural net:
-  - swept collision that snaps to contact (Java undid the move, so resting positions depended on history)
-  - fall speed capped at 10 px/tick (Java's was unbounded)
-  - hitbox = sprite (Java drew a 40 px sprite over a 5 px hitbox); touching an edge ≠ colliding
-  - explicit `grounded` state; spike respawns flagged per tick in `events`
-- No timer or death counter on screen (removed on purpose).
-- Pure `step(state, action, level)` in `platformnet/physics.py`, no Pygame. ~100k ticks/s headless.
+- `game_py/`: minimal engine derived from the Java game: acceleration, air/ground friction, fixed-height jump,
+  gravity, solid collision, spikes. Fixed 60 ticks/s.
+- **Markov by construction:** each frame's targets (next x, y, vx, vy, dead) are a pure function of exactly the
+  network inputs (keys pressed, x, y, vx, vy, level tiles). No stored `grounded` (derived from position + tiles,
+  since collisions snap to exact contact), no timers, no randomness. Tested by recomputing every logged frame
+  in shuffled order from a level rebuilt from the logged tiles alone.
+- Movement: holding a direction → top speed 3.3 px/tick; release on ground → stops in a few ticks;
+  release in air → keeps momentum, bleeds 5%/tick (holding keeps full speed). Jump apex ~55 px, fixed. Fall cap 15 px/tick, swept collision (no tunnelling).
+- Pure `step(state, action, level)` in `platformnet/physics.py`, no Pygame.
 - One level, `levels/level1.txt` (500×500 px, 5 px tiles): step, spike pit, platform, thin wall, spikes, exit.
-- `python game.py` → keyboard play. Every tick is logged to `data/human/ep_NNNNNN.npz`
-  (states [T,5] = x, y, vx, vy, grounded; actions [T,2]; next_states [T,5]; episode_ids; events; start_state; physics/level hashes).
-- Determinism: replaying any episode's actions reproduces states bit-for-bit (`tests/test_determinism.py`,
-  which also re-checks every recorded episode on disk). 15 tests pass.
-- A search bot clears the level in 3.5 s without clipping, so it is beatable.
+- `python game.py` → keyboard play, no timer/death HUD. Every tick logged to `data/human/ep_NNNNNN.npz`:
+  inputs `actions [T,2]`, `states [T,4]`, `tiles [100,100]`; targets `next_states [T,4]`, `dead [T]`.
+- Replay reproduces logs bit-for-bit. 20 tests pass. Search bot clears the level (~3 s) without clipping.
 
 ## Run
 ```
@@ -33,5 +31,6 @@ Keys: arrows/WASD, Up/Space/W jump, R restart, Esc quit.
 
 ## Known issues / notes
 - Ice, bounce pads, one-way platforms and multiple rooms were cut on purpose to keep it simple. Add back later if time allows.
+- Feeding all 10,000 tiles to the net is fine but they are constant with one level, so they carry no information until there are more levels.
 - Changing any physics constant invalidates recorded data: bump `PHYSICS_VERSION` and re-record.
 - `levels/level1.txt` is the source of truth; `tools/make_levels.py` overwrites it.
