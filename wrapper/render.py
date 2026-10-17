@@ -24,7 +24,7 @@ COLOR_PLAYER = (255, 255, 255)  # Player visual
 
 def load_level(level_num):
     """Loads level data from a file based on level number."""
-    filepath = f"levels/level{level_num}.txt"
+    filepath = f"../levels/level{level_num}.txt"
     if not os.path.exists(filepath):
         return None, None
     
