@@ -1,29 +1,25 @@
-"""ASCII room loader. One file per room, 100 columns x 100 rows, one char per 5px tile.
+"""ASCII level loader. 100 columns x 100 rows, one char per 5px tile.
 
-    .  empty     #  solid     ~  ice      ^  bounce     -  one-way
-    X  spike (kills on overlap, not solid)     E  exit
-    S  spawn (player's top-left tile; empty for physics)
+    .  empty     #  solid     X  spike (kills on overlap, not solid)
+    E  exit      S  spawn (player's top-left tile; empty for physics)
 
-Lines starting with ';' are metadata/comments, e.g. "; name: Ice cave".
-Anything outside the grid counts as solid, so every room is sealed by the screen edge.
+Lines starting with ';' are comments. Anything outside the grid counts as solid.
 """
 import hashlib
 from pathlib import Path
 
-from .physics import (BOUNCE, EMPTY, EXIT, GRID_H, GRID_W, ICE, ONE_WAY, PLAYER,
-                      SOLID, SPIKE, TILE)
+from .physics import EMPTY, EXIT, GRID_H, GRID_W, PLAYER, SOLID, SPIKE, TILE
 
-LEVELS_DIR = Path(__file__).resolve().parent.parent / "levels"
+LEVEL_PATH = Path(__file__).resolve().parent.parent / "levels" / "level1.txt"
 
-CHAR_TO_TILE = {".": EMPTY, "#": SOLID, "~": ICE, "^": BOUNCE, "-": ONE_WAY,
-                "X": SPIKE, "E": EXIT, "S": EMPTY}
+CHAR_TO_TILE = {".": EMPTY, "#": SOLID, "X": SPIKE, "E": EXIT, "S": EMPTY}
 
 
 class Level:
-    def __init__(self, name, rows, spawn):
-        self.name = name
+    def __init__(self, rows, spawn):
         self.rows = rows  # GRID_H tuples of tile codes
         self.spawn = spawn  # (x, y) pixels, player's top-left
+        self.hash = hashlib.sha1(repr(rows).encode()).hexdigest()[:12]
 
     def tile(self, c, r):
         if 0 <= c < GRID_W and 0 <= r < GRID_H:
@@ -40,43 +36,23 @@ class Level:
         return False
 
 
-def parse_level(text, fallback_name="room"):
-    name = fallback_name
-    grid = []
-    for line in text.splitlines():
-        if line.startswith(";"):
-            key, _, val = line[1:].partition(":")
-            if key.strip() == "name":
-                name = val.strip()
-        elif line.strip():
-            grid.append(line)
+def parse_level(text):
+    grid = [line for line in text.splitlines() if line.strip() and not line.startswith(";")]
     if len(grid) != GRID_H or any(len(row) != GRID_W for row in grid):
         bad = [i for i, row in enumerate(grid) if len(row) != GRID_W]
-        raise ValueError(f"{name}: need {GRID_W}x{GRID_H} grid, got {len(grid)} rows; bad rows {bad[:5]}")
+        raise ValueError(f"need {GRID_W}x{GRID_H} grid, got {len(grid)} rows; bad rows {bad[:5]}")
     spawns = [(c, r) for r, row in enumerate(grid) for c, ch in enumerate(row) if ch == "S"]
     if len(spawns) != 1:
-        raise ValueError(f"{name}: need exactly one S, found {len(spawns)}")
+        raise ValueError(f"need exactly one S, found {len(spawns)}")
     rows = []
     for r, row in enumerate(grid):
         try:
             rows.append(tuple(CHAR_TO_TILE[ch] for ch in row))
         except KeyError as e:
-            raise ValueError(f"{name}: unknown tile char {e} on row {r}") from None
+            raise ValueError(f"unknown tile char {e} on row {r}") from None
     sc, sr = spawns[0]
-    return Level(name, rows, (float(sc * TILE), float(sr * TILE)))
+    return Level(rows, (float(sc * TILE), float(sr * TILE)))
 
 
-def load_levels(levels_dir=LEVELS_DIR):
-    """Rooms in play order: zone1.txt, zone2.txt, ... Zone id = list index."""
-    paths = sorted(Path(levels_dir).glob("zone*.txt"))
-    if not paths:
-        raise FileNotFoundError(f"no zone*.txt in {levels_dir}")
-    return [parse_level(p.read_text(), p.stem) for p in paths]
-
-
-def levels_hash(levels):
-    """Fingerprint stored with every episode, so data from an old layout is detectable."""
-    h = hashlib.sha1()
-    for lv in levels:
-        h.update(repr(lv.rows).encode())
-    return h.hexdigest()[:12]
+def load_level(path=LEVEL_PATH):
+    return parse_level(Path(path).read_text())
