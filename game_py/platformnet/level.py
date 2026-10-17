@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .physics import EMPTY, EXIT, GRID_H, GRID_W, PLAYER, SOLID, SPIKE, TILE
 
-LEVEL_PATH = Path(__file__).resolve().parent.parent / "levels" / "level1.txt"
+LEVEL_PATH = Path(__file__).resolve().parent.parent / "levels" / "random2.txt"  # temporary; normally level1.txt
 
 CHAR_TO_TILE = {".": EMPTY, "#": SOLID, "X": SPIKE, "E": EXIT, "S": EMPTY}
 

@@ -8,7 +8,7 @@
     Ctrl+Z          undo        Ctrl+S   save        Ctrl+N   clear
     Esc             quit (unsaved changes are lost)
 
-Usage: python level_editor.py [path]   (default levels/level1.txt; created if missing)
+Usage: python level_editor.py [path]   (default levels/random2.txt; created if missing)
 The grid is 100 x 100 tiles, the same as the game. The white box at the spawn
 shows the player's 2x2-tile size.
 """

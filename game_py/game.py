@@ -5,7 +5,7 @@
     Esc   quit
 
 Physics runs exactly one fixed tick per rendered frame at 60 Hz, never variable dt.
-Usage: python game.py [level file]   (default levels/level1.txt; make levels with level_editor.py)
+Usage: python game.py [level file]   (default levels/random2.txt; make levels with level_editor.py)
 Every run is recorded to recordings/ (see gamerecorder.py).
 """
 import sys
