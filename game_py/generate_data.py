@@ -119,7 +119,7 @@ def generate(count, level_path=LEVEL1_PATH, level_share=0.4, solid=(0.02, 0.2), 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("-n", "--count", type=int, default=10000, help="number of pairs (default 10000)")
+    parser.add_argument("-n", "--count", type=int, default=5000, help="number of pairs (default 100000)")
     parser.add_argument("--level", default=LEVEL1_PATH, help="real level mixed in (default levels/level1.txt)")
     parser.add_argument("--level-share", type=float, default=0.4,
                         help="fraction of pairs on --level; the rest get random maps (default 0.4; 1 = all, 0 = none)")
