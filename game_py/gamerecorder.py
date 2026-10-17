@@ -1,53 +1,74 @@
+"""Record human play as JSON input -> output pairs, one file per run.
+
+    python gamerecorder.py [level file]   play (same controls as game.py) and record
+
+Every frame becomes one pair. The input is frame 1: the keys pressed and the state the player was in.
+The output is frame 2: the state the player is actually in on the next frame (the spawn point after
+a death), plus isDead / isFinished, which belong to frame 1 (did this frame's move hit a spike or
+reach the exit). So each pair's output position/velocity equals the next pair's input.
+
+Each run (spawn -> finish, restart or quit) is written to recordings/<timestamp>.json as a list of
+{"input": {...}, "output": {...}} pairs.
+"""
 import json
+import sys
+import time
 from pathlib import Path
-import numpy as np
-from platformnet.logger import DATA_DIR
+
 from platformnet.level import LEVEL_PATH
 
-def export_human_data_to_json(output_filename="inputs_dataset.json"):
-    human_dir = DATA_DIR / "human"
-    if not human_dir.exists():
-        print(f"Directory {human_dir} not found. Play some games first or disable --no-log.")
-        return
+RECORDINGS_DIR = Path(__file__).resolve().parent / "recordings"
 
-    # Load the actual raw text contents of the level file (e.g., level1.txt)
-    level_content = LEVEL_PATH.read_text() if LEVEL_PATH.exists() else ""
 
-    dataset = []
+def make_pair(level_text, state, action, next_state, dead, finished):
+    x, y, vx, vy = state
+    nx, ny, nvx, nvy = next_state
+    return {
+        "input": {
+            "shouldLeft": 1 if action[0] < 0 else 0,
+            "shouldRight": 1 if action[0] > 0 else 0,
+            "wantsJump": int(action[1]),
+            "LEVEL": level_text,
+            "prevposx": float(x),
+            "prevposy": float(y),
+            "prevvelx": float(vx),
+            "prevvely": float(vy),
+        },
+        "output": {
+            "posx": float(nx),
+            "posy": float(ny),
+            "velx": float(nvx),
+            "vely": float(nvy),
+            "isDead": int(dead),
+            "isFinished": int(finished),
+        },
+    }
 
-    # Iterate through all recorded numpy archive episode files
-    for file_path in human_dir.glob("*.npz"):
-        data = np.load(file_path, allow_pickle=True)
-        
-        actions = data.get("actions")  # shape (T, 2): [input_dir, jump][cite: 1, 3]
-        states = data.get("states")    # shape (T, 4): [x, y, vx, vy][cite: 3, 4]
 
-        if actions is None or states is None:
-            continue
+class GameRecorder:
+    def __init__(self, level_path=LEVEL_PATH, out_dir=RECORDINGS_DIR):
+        self.level_text = Path(level_path).read_text()
+        self.out_dir = Path(out_dir)
+        self.pairs = []
 
-        for t in range(len(actions)):
-            input_dir, jump = int(actions[t][0]), int(actions[t][1])
-            x, y, vx, vy = float(states[t][0]), float(states[t][1]), float(states[t][2]), float(states[t][3])
+    def record(self, state, action, next_state, dead, finished):
+        """Log one frame: state + action, the next frame's state, and this frame's dead/finished."""
+        self.pairs.append(make_pair(self.level_text, state, action, next_state, dead, finished))
 
-            should_left = 1 if input_dir < 0 else 0
-            should_right = 1 if input_dir > 0 else 0
-            wants_jump = int(jump)
+    def end_episode(self):
+        """Write the current run to its own file (if it has any frames) and start a new one."""
+        if not self.pairs:
+            return None
+        self.out_dir.mkdir(parents=True, exist_ok=True)
+        path = self.out_dir / f"{time.strftime('%Y%m%d-%H%M%S')}-{time.time_ns() % 10**9:09d}.json"
+        path.write_text(json.dumps(self.pairs, indent=2))
+        print(f"Recorded {len(self.pairs)} pairs to {path}")
+        self.pairs = []
+        return path
 
-            record = {
-                "shouldleft": should_left,
-                "shouldright": should_right,
-                "wantsjump": wants_jump,
-                "LEVEL": level_content,
-                "prevposx": x,
-                "prevposy": y,
-                "prevvelx": vx,
-                "prevvely": vy
-            }
-            dataset.append(record)
-
-    output_path = DATA_DIR / output_filename
-    output_path.write_text(json.dumps(dataset, indent=2))
-    print(f"Successfully exported {len(dataset)} frames to {output_path.resolve()}")
 
 if __name__ == "__main__":
-    export_human_data_to_json()
+    import game
+
+    level_path = sys.argv[1] if len(sys.argv) > 1 else LEVEL_PATH
+    game.main(level_path, GameRecorder(level_path))

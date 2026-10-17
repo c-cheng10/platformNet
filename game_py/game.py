@@ -6,6 +6,7 @@
 
 Physics runs exactly one fixed tick per rendered frame at 60 Hz, never variable dt.
 Usage: python game.py [level file]   (default levels/level1.txt; make levels with level_editor.py)
+Every run is recorded to recordings/ (see gamerecorder.py).
 """
 import sys
 from pathlib import Path
@@ -40,8 +41,9 @@ def read_action(keys):
     return (d, j)
 
 
-def main():
-    level = load_level(sys.argv[1]) if len(sys.argv) > 1 else load_level()
+def main(level_path=None, recorder=None):
+    """recorder (see gamerecorder.py) gets every tick's transition and one end_episode() per run."""
+    level = load_level(level_path) if level_path else load_level()
     pygame.init()
     screen = pygame.display.set_mode(SCREEN)
     pygame.display.set_caption("platformNet - real engine")
@@ -59,11 +61,18 @@ def main():
             if ev.type == pygame.QUIT or (ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE):
                 running = False
             elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_r:
+                if recorder:
+                    recorder.end_episode()
                 state, finished = spawn_state(level), False
 
         if not finished:
             action = read_action(pygame.key.get_pressed())
-            _, _, state, finished = advance(state, action, level)
+            _, dead, new_state, finished = advance(state, action, level)
+            if recorder:
+                recorder.record(state, action, new_state, dead, finished)
+            state = new_state
+            if finished and recorder:
+                recorder.end_episode()
 
         screen.blit(background, (0, 0))
         screen.blit(player_img, (round(state[0]), round(state[1])))
@@ -73,8 +82,13 @@ def main():
         pygame.display.flip()
         clock.tick(TICK_HZ)
 
+    if recorder:
+        recorder.end_episode()
     pygame.quit()
 
 
 if __name__ == "__main__":
-    main()
+    from gamerecorder import GameRecorder
+
+    level_path = sys.argv[1] if len(sys.argv) > 1 else None
+    main(level_path, GameRecorder(level_path) if level_path else GameRecorder())
