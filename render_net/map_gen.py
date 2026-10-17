@@ -2,6 +2,7 @@
 maps instead of memorising one.
 
     make_maps(B, seed=None) -> [B, 100, 100] long tensor of tile types
+    make_maps_np(B, seed=None) -> the same as an int64 numpy array (no torch needed)
 
 Half the maps are "level-like" (floors with gaps, platforms, walls, spikes on
 surfaces, an exit), half are random rectangles. Sizes are log-uniform, so small
@@ -12,17 +13,23 @@ Anything the generator never makes, the network won't render well. Leaving
 something out on purpose is fine (glitch bait), but do it deliberately.
 """
 import math
+import sys
+from pathlib import Path
 
 import numpy as np
-import torch
 
-from true_view import EMPTY, EXIT, SOLID, SPIKE  # also puts game_py on the path
-from platformnet.physics import GRID_H, GRID_W  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "game_py"))
+from platformnet.physics import EMPTY, EXIT, GRID_H, GRID_W, SOLID, SPIKE  # noqa: E402
 
 LEVEL_LIKE_FRACTION = 0.5
 
 
 def make_maps(B, seed=None):
+    import torch  # only here, so game_py/generate_data.py can use make_maps_np without torch
+    return torch.from_numpy(make_maps_np(B, seed))
+
+
+def make_maps_np(B, seed=None):
     rng = np.random.default_rng(seed)
     maps = np.zeros((B, GRID_H, GRID_W), dtype=np.int64)
     for b in range(B):
@@ -30,7 +37,7 @@ def make_maps(B, seed=None):
             _level_like(maps[b], rng)
         else:
             _random_rects(maps[b], rng)
-    return torch.from_numpy(maps)
+    return maps
 
 
 # ---- building blocks ---------------------------------------------------------

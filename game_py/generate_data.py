@@ -1,34 +1,37 @@
 """Generate random input -> output pairs without playing, all into one file.
 
-    python generate_data.py [-n COUNT] [--level FILE] [--level-share FRAC] [--solid MIN MAX]
-                            [--spike P] [--exit P] [--cluster C] [--grounded FRAC] [--seed SEED]
+    python generate_data.py [-n COUNT] [--level FILE] [--level-share FRAC] [--maps M]
+                            [--grounded FRAC] [--seed SEED]
 
 A share of pairs (--level-share, default 40%) use a real level (--level, default levels/level1.txt).
-Every other pair gets its own random map of walls, spikes (--spike), exits (--exit) and air, plus
-one random spawn point S. Tiles clump together: filling the grid row by row, each tile copies an
-already-placed neighbour (left, up-left, up, up-right) with chance --cluster, otherwise it is drawn
-fresh. That makes wall chunks and air pockets instead of noise, while keeping the overall mix. Each
-map picks its own wall chance between --solid MIN and MAX (default 2%-20%), so some maps are sparse
-and some crowded, but air always far outnumbers walls. The map's text is the pair's LEVEL.
+The rest are spread over random maps made by render_net/map_gen.py, each with one random spawn
+point S on a clear spot. Each file holds --maps levels in total (default 100), --level included.
 
 Each pair: a random frame 1 (position, velocity, keys) and frame 2 computed by the real physics,
 in the same format as gamerecorder.py (frame 2 is the spawn point after a death; isDead and
-isFinished belong to frame 1). Frame 1 is always a state real play can be in: never inside a wall,
-and never touching spikes or the exit (touching those already ended the run). A fraction of samples
+isFinished belong to frame 1), except that LEVEL is an index into the file's "levels" list instead
+of the level text. Frame 1 is always a state real play can be in: never inside a wall, and never
+touching spikes or the exit (touching those already ended the run). A fraction of samples
 (--grounded) stand exactly on a floor with vy = 0, since random positions almost never land on the
 ground and jumping / ground friction would otherwise never appear.
 
-Output: generated/<timestamp>.json
+Output: generated/<timestamp>.json, minified: {"levels": [text, ...], "pairs": [...]}. Each level's
+text is stored once at the top; pairs reference it by index. levels[0] is --level (when
+--level-share > 0), the rest are the random maps.
 """
 import argparse
 import json
 import random
+import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "render_net"))
+from map_gen import make_maps_np  # noqa: E402
+
 from gamerecorder import make_pair
 from platformnet.level import load_level, parse_level
-from platformnet.physics import EXIT, GRID_H, GRID_W, JUMP_VEL, MAX_FALL, MAX_RUN, PLAYER, SOLID, SPIKE, TILE
+from platformnet.physics import EMPTY, EXIT, GRID_H, GRID_W, JUMP_VEL, MAX_FALL, MAX_RUN, PLAYER, SOLID, SPIKE, TILE
 from platformnet.run import advance
 
 GENERATED_DIR = Path(__file__).resolve().parent / "generated"
@@ -37,6 +40,7 @@ MAX_X = GRID_W * TILE - PLAYER
 MAX_Y = GRID_H * TILE - PLAYER
 SIZE = PLAYER // TILE  # player is SIZE x SIZE tiles
 TRIES = 1000  # placement attempts before giving up on a map
+TILE_TO_CHAR = {EMPTY: ".", SOLID: "#", EXIT: "E", SPIKE: "X"}
 
 
 def is_reachable(state, level):
@@ -44,31 +48,23 @@ def is_reachable(state, level):
     return not any(level.overlaps(state, t) for t in (SOLID, SPIKE, EXIT))
 
 
-def random_level(rng, solid=(0.02, 0.2), spike=0.03, exit_=0.01, cluster=0.85):
-    """A map of clumped random tiles plus one spawn S on a clear SIZE x SIZE spot.
-    The wall chance is drawn uniformly from the solid (min, max) range, once per map.
-    Each tile copies a random already-placed neighbour with chance `cluster`, else takes a fresh
-    draw; copying keeps the overall mix at the given chances, it just groups like tiles together.
-    Returns (level text, Level), or None if no clear spot was found."""
-    solid = rng.uniform(*solid)
-    fresh = rng.choices("#XE.", weights=(solid, spike, exit_, 1 - solid - spike - exit_), k=GRID_W * GRID_H)
-    grid = [["."] * GRID_W for _ in range(GRID_H)]
-    for r in range(GRID_H):
-        for c in range(GRID_W):
-            neighbours = [grid[r][c - 1]] if c else []
-            if r:
-                neighbours += grid[r - 1][max(c - 1, 0):c + 2]
-            if neighbours and rng.random() < cluster:
-                grid[r][c] = rng.choice(neighbours)
-            else:
-                grid[r][c] = fresh[r * GRID_W + c]
-    for _ in range(TRIES):
-        c, r = rng.randrange(GRID_W - SIZE + 1), rng.randrange(GRID_H - SIZE + 1)
-        if all(grid[r + dr][c + dc] == "." for dr in range(SIZE) for dc in range(SIZE)):
+def random_levels(count, rng):
+    """count map_gen maps, each with one spawn S on a clear SIZE x SIZE spot (maps with none are redrawn).
+    Returns [(level text, Level), ...]."""
+    levels = []
+    while len(levels) < count:
+        for tiles in make_maps_np(count - len(levels), seed=rng.randrange(2**32)):
+            empty = tiles == EMPTY
+            clear = [(c, r) for r in range(GRID_H - SIZE + 1) for c in range(GRID_W - SIZE + 1)
+                     if empty[r:r + SIZE, c:c + SIZE].all()]
+            if not clear:
+                continue
+            grid = [[TILE_TO_CHAR[t] for t in row] for row in tiles.tolist()]
+            c, r = rng.choice(clear)
             grid[r][c] = "S"
             text = "\n".join("".join(row) for row in grid) + "\n"
-            return text, parse_level(text)
-    return None
+            levels.append((text, parse_level(text)))
+    return levels
 
 
 def random_air_state(level, rng):
@@ -91,55 +87,57 @@ def random_grounded_state(level, rng):
     return None
 
 
-def generate(count, level_path=LEVEL1_PATH, level_share=0.4, solid=(0.02, 0.2), spike=0.03, exit_=0.01,
-             cluster=0.85, grounded=0.5, seed=None):
-    """Each pair uses level_path with chance level_share, otherwise a new random map."""
+def generate(count, level_path=LEVEL1_PATH, level_share=0.4, maps=100, grounded=0.5, seed=None,
+             make_levels=random_levels):
+    """Each pair uses level_path with chance level_share, otherwise one of the random maps;
+    `maps` levels in total, level_path included. level_path may also be a list of paths, in which
+    case the level_share pairs are split evenly between them. Returns (level texts, pairs); each
+    pair's LEVEL is an index into the level texts. make_levels(count, rng) makes the random maps."""
     rng = random.Random(seed)
-    fixed = (Path(level_path).read_text(), load_level(level_path)) if level_share > 0 else None
+    paths = [level_path] if isinstance(level_path, (str, Path)) else list(level_path)
+    fixed = [(Path(p).read_text(), load_level(p)) for p in paths] if level_share > 0 else []
+    randoms = make_levels(maps - len(fixed), rng) if level_share < 1 else []
+    levels = fixed + randoms
     pairs = []
+    fixed_misses = 0
     while len(pairs) < count:
         use_fixed = rng.random() < level_share
-        made = fixed if use_fixed else random_level(rng, solid, spike, exit_, cluster)
-        if made is None:
-            continue
-        level_text, level = made
+        index = rng.randrange(len(fixed)) if use_fixed else len(fixed) + rng.randrange(len(randoms))
+        level = levels[index][1]
         if rng.random() < grounded:
             state = random_grounded_state(level, rng)
         else:
             state = random_air_state(level, rng)
-        if state is None:
-            if use_fixed:
-                raise ValueError(f"no valid start position found in {level_path}")
-            continue  # this random map had no valid spot; make another
+        if state is None:  # no valid spot found this time (rare); draw again
+            fixed_misses = fixed_misses + 1 if use_fixed else fixed_misses
+            if fixed_misses > 100:
+                raise ValueError(f"no valid start position found in {paths[index]}")
+            continue
         action = (rng.choice((-1, 0, 1)), rng.choice((0, 1)))
         _, dead, new_state, finished = advance(state, action, level)
-        pairs.append(make_pair(level_text, state, action, new_state, dead, finished))
-    return pairs
+        pairs.append(make_pair(index, state, action, new_state, dead, finished))
+    return [text for text, _ in levels], pairs
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("-n", "--count", type=int, default=5000, help="number of pairs (default 100000)")
+    parser.add_argument("-n", "--count", type=int, default=250000, help="number of pairs (default 5000)")
     parser.add_argument("--level", default=LEVEL1_PATH, help="real level mixed in (default levels/level1.txt)")
     parser.add_argument("--level-share", type=float, default=0.4,
                         help="fraction of pairs on --level; the rest get random maps (default 0.4; 1 = all, 0 = none)")
-    parser.add_argument("--solid", type=float, nargs=2, default=(0.02, 0.2), metavar=("MIN", "MAX"),
-                        help="range each map's wall chance is drawn from (default 0.02 0.2)")
-    parser.add_argument("--spike", type=float, default=0.03, help="chance a random tile is a spike (default 0.03)")
-    parser.add_argument("--exit", type=float, default=0.01, help="chance a random tile is an exit (default 0.01)")
-    parser.add_argument("--cluster", type=float, default=0.85,
-                        help="chance a tile copies a neighbour; 0 = pure noise, near 1 = big blobs (default 0.85)")
+    parser.add_argument("--maps", type=int, default=100, help="levels per file, --level included (default 100)")
     parser.add_argument("--grounded", type=float, default=0.5, help="fraction starting on a floor (default 0.5)")
     parser.add_argument("--seed", type=int, help="random seed, for repeatable output")
     args = parser.parse_args()
-    if not 0 <= args.solid[0] <= args.solid[1] or args.solid[1] + args.spike + args.exit > 1:
-        parser.error("need 0 <= --solid MIN <= MAX, and MAX + --spike + --exit at most 1")
     if not 0 <= args.level_share <= 1:
         parser.error("--level-share must be between 0 and 1")
+    if 0 < args.level_share < 1 and args.maps < 2:
+        parser.error("--maps must be at least 2 when mixing --level with random maps")
+    if args.level_share == 0 and args.maps < 1:
+        parser.error("--maps must be at least 1")
 
-    pairs = generate(args.count, args.level, args.level_share, args.solid, args.spike, args.exit, args.cluster,
-                     args.grounded, args.seed)
+    levels, pairs = generate(args.count, args.level, args.level_share, args.maps, args.grounded, args.seed)
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
     path = GENERATED_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}.json"
-    path.write_text(json.dumps(pairs, indent=2))
-    print(f"Generated {len(pairs)} pairs to {path}")
+    path.write_text(json.dumps({"levels": levels, "pairs": pairs}, separators=(",", ":")))
+    print(f"Generated {len(pairs)} pairs on {len(levels)} levels to {path}")

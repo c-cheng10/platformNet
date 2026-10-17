@@ -50,11 +50,15 @@ def load_recordings(files):
     level_cache = {}  # every frame of a run repeats the same level text; parse it once
     levels, keys, prev, nxt, flags = [], [], [], [], []
     for f in files:
-        for pair in json.loads(Path(f).read_text()):
+        data = json.loads(Path(f).read_text())
+        # generate_data.py files are {"levels": [text, ...], "pairs": [...]}, LEVEL being an index into levels
+        texts, pairs = (data["levels"], data["pairs"]) if isinstance(data, dict) else (None, data)
+        for pair in pairs:
             i, o = pair["input"], pair["output"]
-            if i["LEVEL"] not in level_cache:
-                level_cache[i["LEVEL"]] = parse_level(i["LEVEL"])
-            levels.append(level_cache[i["LEVEL"]])
+            text = texts[i["LEVEL"]] if texts is not None else i["LEVEL"]
+            if text not in level_cache:
+                level_cache[text] = parse_level(text)
+            levels.append(level_cache[text])
             keys.append([i[k] for k in KEYS])
             prev.append([i[k] for k in PREV_STATE])
             nxt.append([o[k] for k in NEXT_STATE])
