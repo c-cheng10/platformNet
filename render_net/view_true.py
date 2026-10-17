@@ -7,7 +7,7 @@
 
 Left: the 150x150 camera view from true_view(), scaled 3x.
 Right: the whole map with the camera's area outlined.
-Usage: python view_true.py [level file]   (default game_py/levels/level1.txt)
+Usage: python view_true.py [level]   (e.g. level2; default <repo>/levels/level1.txt)
 """
 import sys
 
@@ -33,7 +33,7 @@ def surface_from_types(types):
 def main():
     path = sys.argv[1] if len(sys.argv) > 1 else None
     tiles = load_tiles(path)
-    level = load_level(path) if path else load_level()
+    level = load_level(path)
 
     pygame.init()
     screen = pygame.display.set_mode((W, H))

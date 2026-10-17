@@ -30,12 +30,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "render_net"))
 from map_gen import make_maps_np  # noqa: E402
 
 from gamerecorder import make_pair
-from platformnet.level import load_level, parse_level
+from platformnet.level import LEVEL_PATH, load_level, parse_level, resolve_level
 from platformnet.physics import EMPTY, EXIT, GRID_H, GRID_W, JUMP_VEL, MAX_FALL, MAX_RUN, PLAYER, SOLID, SPIKE, TILE
 from platformnet.run import advance
 
 GENERATED_DIR = Path(__file__).resolve().parent / "generated"
-LEVEL1_PATH = Path(__file__).resolve().parent / "levels" / "level1.txt"
+LEVEL1_PATH = LEVEL_PATH
 MAX_X = GRID_W * TILE - PLAYER
 MAX_Y = GRID_H * TILE - PLAYER
 SIZE = PLAYER // TILE  # player is SIZE x SIZE tiles
@@ -95,7 +95,8 @@ def generate(count, level_path=LEVEL1_PATH, level_share=0.4, maps=100, grounded=
     pair's LEVEL is an index into the level texts. make_levels(count, rng) makes the random maps."""
     rng = random.Random(seed)
     paths = [level_path] if isinstance(level_path, (str, Path)) else list(level_path)
-    fixed = [(Path(p).read_text(), load_level(p)) for p in paths] if level_share > 0 else []
+    paths = [resolve_level(p) for p in paths]
+    fixed = [(p.read_text(), load_level(p)) for p in paths] if level_share > 0 else []
     randoms = make_levels(maps - len(fixed), rng) if level_share < 1 else []
     levels = fixed + randoms
     pairs = []

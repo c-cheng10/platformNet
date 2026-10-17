@@ -1,14 +1,17 @@
 import pygame
 import sys
 import os
+from pathlib import Path
+
+LEVELS_DIR = Path(__file__).resolve().parents[1] / "levels"
 
 # Initialize Pygame
 pygame.init()
 
 # --- Configuration ---
-SCREEN_WIDTH = 500
-SCREEN_HEIGHT = 500
-TILE_SIZE = 5  # 100x100 grid fits a 500x500 screen perfectly
+SCREEN_WIDTH = 1000
+SCREEN_HEIGHT = 1000
+TILE_SIZE = 10 # 100x100 grid fits a 500x500 screen perfectly
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Platformer Renderer")
@@ -24,7 +27,7 @@ COLOR_PLAYER = (255, 255, 255)  # Player visual
 
 def load_level(level_num):
     """Loads level data from a file based on level number."""
-    filepath = f"levels/level{level_num}.txt"
+    filepath = LEVELS_DIR / f"level{level_num}.txt"
     if not os.path.exists(filepath):
         return None, None
     

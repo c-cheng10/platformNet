@@ -1,14 +1,15 @@
 """Draw levels with the mouse and save them as the ASCII files the game loads.
 
-    Left mouse      paint with the selected tile      Right mouse   erase
-    Shift + drag    fill a rectangle (left = tile, right = erase)
+    Left mouse      paint with the selected tile      Right mouse or Ctrl+left   erase
+    Shift + drag    fill a rectangle (left = tile, right or Ctrl = erase)
     1 solid   2 spike   3 exit   4 spawn (one per level; placing it moves it)
     [ / ]           brush size smaller / bigger
     G               toggle grid lines
     Ctrl+Z          undo        Ctrl+S   save        Ctrl+N   clear
     Esc             quit (unsaved changes are lost)
 
-Usage: python level_editor.py [path]   (default levels/random2.txt; created if missing)
+Usage: python level_editor.py [level]   e.g. level4 -> <repo>/levels/level4.txt (default level1;
+created if missing). A full path also works.
 The grid is 100 x 100 tiles, the same as the game. The white box at the spawn
 shows the player's 2x2-tile size.
 """
@@ -17,7 +18,7 @@ from pathlib import Path
 
 import pygame
 
-from platformnet.level import LEVEL_PATH, parse_level
+from platformnet.level import parse_level, resolve_level
 from platformnet.physics import GRID_H, GRID_W, TILE
 
 CELL = 7                       # on-screen pixels per tile (the game uses 5)
@@ -31,12 +32,18 @@ MAX_UNDO = 50
 
 
 def load_grid(path):
-    if path.exists():
-        rows = [l for l in path.read_text().splitlines() if l.strip() and not l.startswith(";")]
-        if len(rows) == GRID_H and all(len(r) == GRID_W for r in rows):
-            return [list(r) for r in rows]
-        print(f"{path} is not {GRID_W}x{GRID_H}; starting blank")
-    return blank_grid()
+    """Load a level; a wrong-sized file is padded/trimmed to 100x100 (never silently blanked,
+    so Ctrl+S can't wipe a real level). Returns (grid, warning or "")."""
+    if not path.exists():
+        return blank_grid(), f"new level {path.name}"
+    rows = [l.rstrip("\r\n") for l in path.read_text().splitlines() if l.strip() and not l.startswith(";")]
+    warning = ""
+    if len(rows) != GRID_H or any(len(r) != GRID_W for r in rows):
+        warning = f"{path.name} was {max(map(len, rows), default=0)}x{len(rows)}: padded/trimmed to {GRID_W}x{GRID_H}, check it"
+        print(warning)
+    grid = [list(r[:GRID_W].ljust(GRID_W, ".")) for r in rows[:GRID_H]]
+    grid += [["."] * GRID_W for _ in range(GRID_H - len(grid))]
+    return grid, warning
 
 
 def blank_grid():
@@ -137,8 +144,8 @@ def draw(screen, font, grid, tool, size, show_grid, rect_drag, mouse_cell, msg, 
 
 
 def main():
-    path = Path(sys.argv[1]) if len(sys.argv) > 1 else LEVEL_PATH
-    grid = load_grid(path)
+    path = resolve_level(sys.argv[1] if len(sys.argv) > 1 else None)
+    grid, load_warning = load_grid(path)
     pygame.init()
     screen = pygame.display.set_mode((W, H + BAR))
     pygame.display.set_caption(f"platformNet level editor - {path.name}")
@@ -157,6 +164,10 @@ def main():
     def flash(text):
         nonlocal msg, msg_until
         msg, msg_until = text, pygame.time.get_ticks() + 3000
+
+    if load_warning:
+        flash(load_warning)
+        msg_until += 7000  # keep a load problem on screen for 10 s
 
     running = True
     while running:
@@ -192,7 +203,8 @@ def main():
                 elif ev.key == pygame.K_g:
                     show_grid = not show_grid
             elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button in (1, 3) and mouse_cell:
-                ch = tool if ev.button == 1 else "."
+                ctrl_held = pygame.key.get_mods() & pygame.KMOD_CTRL
+                ch = tool if ev.button == 1 and not ctrl_held else "."   # Ctrl+click = erase
                 push_undo()
                 dirty = True
                 if pygame.key.get_mods() & pygame.KMOD_SHIFT:
