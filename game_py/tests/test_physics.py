@@ -56,7 +56,7 @@ def test_no_tunnelling_through_thin_wall_at_top_speed():
     assert s[0] + PLAYER <= 300
 
 
-def test_jump_is_fixed_height_and_matches_java():
+def test_jump_is_fixed_height():
     lv = level(solid=[FLOOR])
     apexes = []
     for hold in (1, 5, 200):  # releasing early must not change the height
@@ -67,7 +67,7 @@ def test_jump_is_fixed_height_and_matches_java():
             s = step(s, (0, 1 if t < hold and s[4] == 0 else 0), lv)
             top = min(top, s[1])
         apexes.append(440 - top)
-    assert apexes[0] == apexes[1] == apexes[2] and 95 < apexes[0] < 110  # ~103 px
+    assert apexes[0] == apexes[1] == apexes[2] and 50 < apexes[0] < 62  # ~57 px
 
 
 def test_friction_stops_the_player_cleanly():

@@ -5,7 +5,8 @@ Deliberately minimal: acceleration, friction, fixed-height jump, gravity, solid
 collision. Kill blocks (spikes) are handled in run.py.
 
 Kept from the Java game: per-tick units at 100 ticks/s (Swing Timer was 10 ms),
-ACCEL 0.7, multiplicative FRICTION 0.85, GRAVITY 0.3, JUMP_VEL -8, jump-while-held.
+multiplicative FRICTION 0.85, GRAVITY 0.3, jump-while-held. ACCEL and JUMP_VEL were
+lowered from Java (0.7, -8) to slow the player and shorten the jump.
 
 Fixed for the neural net:
   1. Collisions snap to the contact surface (swept against the tile grid) instead
@@ -24,7 +25,7 @@ Action (tuple of 2 ints): input_dir in {-1, 0, 1}, jump in {0, 1} (held)
 from math import ceil, floor
 
 # Bump whenever constants or rules change: data recorded before is under different physics.
-PHYSICS_VERSION = 2
+PHYSICS_VERSION = 3
 
 TICK_HZ = 100
 TILE = 5
@@ -32,11 +33,11 @@ PLAYER = 10
 GRID_W = 100
 GRID_H = 100
 
-ACCEL = 0.7            # (Java: 0.7)
-FRICTION = 0.85        # vx multiplier every tick (Java: 0.85) -> top speed ~3.97 px/tick
+ACCEL = 0.35           # (Java: 0.7) halved -> top speed ~1.98 px/tick
+FRICTION = 0.85        # vx multiplier every tick (Java: 0.85)
 GRAVITY = 0.3          # (Java: 0.3)
 MAX_FALL = 10.0        # new: 2 tiles/tick
-JUMP_VEL = -8.0        # (Java: -8) -> apex ~103 px
+JUMP_VEL = -6.0        # (Java: -8) -> apex ~57 px
 VX_EPS = 0.01          # |vx| below this snaps to 0
 
 # Tile codes

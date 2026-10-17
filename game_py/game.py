@@ -15,7 +15,7 @@ import pygame
 from platformnet.level import load_level
 from platformnet.logger import DATA_DIR, EpisodeLogger
 from platformnet.physics import EXIT, GRID_H, GRID_W, PLAYER, SOLID, SPIKE, TICK_HZ, TILE
-from platformnet.run import EV_DEATH, EV_FINISH, advance, spawn_state
+from platformnet.run import EV_FINISH, advance, spawn_state
 
 ASSETS = Path(__file__).resolve().parent / "assets"
 SCREEN = (GRID_W * TILE, GRID_H * TILE)  # 500 x 500
@@ -69,9 +69,9 @@ def main():
         s = spawn_state(level)
         if log:
             log.begin(s)
-        return s, 0, 0, False
+        return s, False
 
-    state, ticks, deaths, finished = restart()
+    state, finished = restart()
     running = True
     while running:
         for ev in pygame.event.get():
@@ -79,7 +79,7 @@ def main():
                 running = False
             elif ev.type == pygame.KEYDOWN and ev.key == pygame.K_r:
                 save()
-                state, ticks, deaths, finished = restart()
+                state, finished = restart()
 
         if not finished:
             action = read_action(pygame.key.get_pressed())
@@ -87,22 +87,18 @@ def main():
             if log:
                 log.record(state, action, ns, event)
             state = nstate
-            ticks += 1
-            deaths += event == EV_DEATH
             if event == EV_FINISH:
                 finished = True
                 save(finished=True)
 
         screen.blit(background, (0, 0))
         screen.blit(player_img, (round(state[0]), round(state[1])))
-        hud = f"t={ticks / TICK_HZ:6.2f}s   deaths {deaths}"
         if log:
-            hud += f"   REC {len(log)}"
-        screen.blit(font.render(hud, True, COLORS["hud"]), (6, 4))
+            screen.blit(font.render(f"REC {len(log)}", True, COLORS["hud"]), (6, 4))
         if last_saved:
             screen.blit(font.render(f"saved {last_saved}", True, COLORS["hud"]), (6, 20))
         if finished:
-            msg = font.render(f"FINISHED {ticks / TICK_HZ:.2f}s, {deaths} deaths - R to run again", True, COLORS["hud"])
+            msg = font.render("FINISHED - R to run again", True, COLORS["hud"])
             screen.blit(msg, msg.get_rect(center=(SCREEN[0] // 2, SCREEN[1] // 2)))
         pygame.display.flip()
         clock.tick(TICK_HZ)
