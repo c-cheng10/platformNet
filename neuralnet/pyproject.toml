@@ -7,11 +7,34 @@ requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.5.4",
     "pygame>=2.6.1",
-    "torch>=2.14.1",
 ]
+
+# Pick one: `uv sync --extra cpu` (no GPU) or `uv sync --extra gpu` (CUDA 12.8)
+[project.optional-dependencies]
+cpu = ["torch==2.11.0"]
+gpu = ["torch==2.11.0"]
 
 [project.scripts]
 neuralnet = "neuralnet:main"
+
+[tool.uv]
+conflicts = [[{ extra = "cpu" }, { extra = "gpu" }]]
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu128", extra = "gpu" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
 
 [build-system]
 requires = ["uv_build>=0.13.1,<0.14.0"]

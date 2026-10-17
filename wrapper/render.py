@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 LEVELS_DIR = Path(__file__).resolve().parents[1] / "levels"
-MODEL_PATH = Path(__file__).resolve().parent / "model.pt"
+MODEL_PATH = Path(__file__).resolve().parent / "model_v2.pt"
 
 # The model and its pre/post-processing live in neuralnet/train.py
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "neuralnet"))
@@ -116,7 +116,7 @@ def get_next_frame(right_pressed, left_pressed, up_pressed, position, velocity, 
 
 ### MAIN LOOP ###
 def main():
-    current_level = 1
+    current_level = 2
     LEVEL_DATA, level_grid = load_level(current_level)
     
     if not LEVEL_DATA:
