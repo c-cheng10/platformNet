@@ -30,14 +30,12 @@ level_grid = [list(row) for row in LEVEL_DATA.strip().splitlines()]
 LEVEL_HEIGHT = len(level_grid)
 LEVEL_WIDTH = len(level_grid[0]) if LEVEL_HEIGHT > 0 else 0
 
-# Find initial 'S' position for player spawn
-player_pos = [0.0, 0.0]
-for r_idx, row in enumerate(level_grid):
-    if 'S' in row:
-        player_pos = [float(row.index('S') * TILE_SIZE), float(r_idx * TILE_SIZE)]
-        break
-
-player_vel = [0.0, 0.0]  # Initial velocity (dx, dy)
+def get_start_position(grid):
+    """Finds the 'S' starting tile coordinates."""
+    for r_idx, row in enumerate(grid):
+        if 'S' in row:
+            return [float(row.index('S') * TILE_SIZE), float(r_idx * TILE_SIZE)]
+    return [0.0, 0.0]
 
 def render_level(surface, grid):
     """Draws the full level grid."""
@@ -71,7 +69,9 @@ def get_next_frame(right_pressed, left_pressed, up_pressed, position, velocity, 
 
 # --- Main Game Loop ---
 def main():
-    global player_pos, player_vel
+    start_pos = get_start_position(level_grid)
+    player_pos = list(start_pos)
+    player_vel = [0.0, 0.0]
     
     running = True
     while running:
@@ -95,6 +95,11 @@ def main():
             player_vel,
             LEVEL_DATA,
         )
+
+        # Handle player death / level reset
+        if is_dead:
+            player_pos = list(start_pos)
+            player_vel = [0.0, 0.0]
 
         # Rendering
         render_level(screen, level_grid)
