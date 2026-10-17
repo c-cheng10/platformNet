@@ -11,7 +11,7 @@
   Jump apex ~55 px (gravity 0.6, jump −8.4), fixed. Fall cap 15 px/tick, swept collision (no tunnelling).
 - Pure `step(state, action, level)` in `platformnet/physics.py`, no Pygame.
 - One level, `levels/level1.txt` (500×500 px, 5 px tiles): step, spike pit, platform, thin wall, spikes, exit.
-- `python game.py` → keyboard play, no timer/death HUD. Every tick logged to `data/human/ep_NNNNNN.npz`:
+- `python game.py` → keyboard play, nothing recorded. `python game.py --log` records every tick to `data/human/ep_NNNNNN.npz`:
   inputs `actions [T,2]`, `states [T,4]`, `tiles [100,100]`; targets `next_states [T,4]`, `dead [T]`.
 - Replay reproduces logs bit-for-bit. 20 tests pass. Search bot clears the level (~3 s) without clipping.
 
@@ -19,7 +19,7 @@
 ```
 cd game_py
 pip install -r requirements.txt
-python game.py            # --no-log to not record
+python game.py            # add --log to record training data
 python -m pytest -q
 ```
 Keys: arrows/WASD, Up/Space/W jump, R restart, Esc quit.

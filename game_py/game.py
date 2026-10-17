@@ -1,11 +1,11 @@
-"""Play the real engine with the keyboard. Every tick is logged to data/human/.
+"""Play the real engine with the keyboard. Nothing is recorded unless you pass --log.
 
     Left/Right or A/D   move          Up / Space / W   jump (fixed height; hold to hop again on landing)
-    R   restart (saves the episode, starts a new one)
-    Esc   quit (saves)
+    R   restart
+    Esc   quit
 
 Physics runs exactly one fixed tick per rendered frame at 60 Hz, never variable dt.
-Usage: python game.py [--no-log]
+Usage: python game.py [--log]   (--log saves every tick to data/human/ as training data)
 """
 import argparse
 from pathlib import Path
@@ -43,7 +43,7 @@ def read_action(keys):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--no-log", action="store_true")
+    ap.add_argument("--log", action="store_true", help="record every tick to data/human/")
     args = ap.parse_args()
 
     level = load_level()
@@ -57,7 +57,7 @@ def main():
     spike_img = pygame.transform.smoothscale(pygame.image.load(ASSETS / "spike.png").convert_alpha(), (TILE, TILE))
     background = render_level(level, spike_img)
 
-    log = None if args.no_log else EpisodeLogger(DATA_DIR / "human", "human", level)
+    log = EpisodeLogger(DATA_DIR / "human", "human", level) if args.log else None
     last_saved = ""
 
     def save(finished=False):
