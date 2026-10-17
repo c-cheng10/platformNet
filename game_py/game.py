@@ -5,7 +5,9 @@
     Esc   quit
 
 Physics runs exactly one fixed tick per rendered frame at 60 Hz, never variable dt.
+Usage: python game.py [level file]   (default levels/level1.txt; make levels with level_editor.py)
 """
+import sys
 from pathlib import Path
 
 import pygame
@@ -39,7 +41,7 @@ def read_action(keys):
 
 
 def main():
-    level = load_level()
+    level = load_level(sys.argv[1]) if len(sys.argv) > 1 else load_level()
     pygame.init()
     screen = pygame.display.set_mode(SCREEN)
     pygame.display.set_caption("platformNet - real engine")

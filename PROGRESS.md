@@ -14,7 +14,8 @@
 ```
 cd game_py
 pip install -r requirements.txt
-python game.py
+python game.py                 # or: python game.py levels/other.txt
+python level_editor.py         # draw levels; Ctrl+S saves ASCII to levels/level1.txt (or a path you pass)
 python -m pytest -q
 ```
 Keys: arrows/WASD, Up/Space/W jump, R restart, Esc quit.
@@ -24,3 +25,5 @@ Keys: arrows/WASD, Up/Space/W jump, R restart, Esc quit.
 - `platformnet/level.py`: loads the ASCII level (`.` empty, `#` solid, `X` spike, `E` exit, `S` spawn)
 - `platformnet/run.py`: spikes and exit on top of the physics
 - `game.py`: Pygame window, keyboard, drawing
+- `level_editor.py`: mouse level editor. 1 solid, 2 spike, 3 exit, 4 spawn; left paint, right erase,
+  Shift+drag rectangle, [ ] brush size, G grid, Ctrl+Z undo, Ctrl+S save (validated), Ctrl+N clear
