@@ -10,9 +10,9 @@ import random
 import numpy as np
 import pytest
 
-from platformnet.level import Level, load_level
+from platformnet.level import LEVEL_PATH, Level, load_level, parse_level
 from platformnet.logger import DATA_DIR, EpisodeLogger, load_episode
-from platformnet.physics import SPIKE, step
+from platformnet.physics import PHYSICS_VERSION, SPIKE, step
 from platformnet.run import advance, replay, spawn_state
 
 LEVEL = load_level()
@@ -70,6 +70,24 @@ def test_replay_is_bit_for_bit(tmp_path, seed):
     assert np.array_equal(dead, ep["dead"])
 
 
+def test_stale_episodes_are_skipped_not_failed(tmp_path):
+    ep_path = EpisodeLogger(tmp_path, "test", LEVEL)
+    ep_path.begin(spawn_state(LEVEL))
+    ep_path.record(spawn_state(LEVEL), (1, 0), (0.0, 0.0, 0.0, 0.0), False)  # deliberately wrong target
+    path = ep_path.save()
+    data = dict(load_episode(path), physics_version=np.int32(PHYSICS_VERSION - 1))
+    np.savez(path, **data)
+    with pytest.raises(pytest.skip.Exception):
+        test_recorded_data_replays(path)
+
+
+def test_level_hash_includes_spawn():
+    rows = LEVEL_PATH.read_text().splitlines()
+    moved = [list(r.replace("S", ".")) for r in rows]
+    moved[1][1] = "S"  # same tiles, different spawn
+    assert parse_level("\n".join("".join(r) for r in moved)).hash != LEVEL.hash
+
+
 def test_episode_format(tmp_path):
     ep = record_episode(tmp_path, sticky_random_actions(800, seed=99))
     T = len(ep["actions"])
@@ -88,8 +106,10 @@ def test_recorded_data_replays(path):
     """Every real episode on disk must still replay. Fails if physics changed after
     recording: re-record, or move the old data aside."""
     ep = load_episode(path)
-    if str(ep.get("level_hash", "")) != LEVEL.hash or "tick_hz" not in ep:
-        pytest.skip("recorded on an older level or physics version")
+    if int(ep.get("physics_version", -1)) != PHYSICS_VERSION:
+        pytest.skip(f"recorded under physics v{int(ep.get('physics_version', -1))}, now v{PHYSICS_VERSION}")
+    if str(ep.get("level_hash", "")) != LEVEL.hash:
+        pytest.skip("recorded on a different level layout")
     states, next_states, _ = replay(ep["start_state"], ep["actions"], LEVEL)
     assert_bitwise_equal(states, ep["states"])
     assert_bitwise_equal(next_states, ep["next_states"])
