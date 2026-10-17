@@ -1,6 +1,9 @@
 import pygame
 import sys
 import os
+from pathlib import Path
+
+LEVELS_DIR = Path(__file__).resolve().parents[1] / "levels"
 
 # Initialize Pygame
 pygame.init()
@@ -24,7 +27,7 @@ COLOR_PLAYER = (255, 255, 255)  # Player visual
 
 def load_level(level_num):
     """Loads level data from a file based on level number."""
-    filepath = f"../levels/level{level_num}.txt"
+    filepath = LEVELS_DIR / f"level{level_num}.txt"
     if not os.path.exists(filepath):
         return None, None
     

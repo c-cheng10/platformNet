@@ -24,7 +24,7 @@ import time
 from pathlib import Path
 
 from gamerecorder import make_pair
-from platformnet.level import load_level, parse_level
+from platformnet.level import load_level, parse_level, resolve_level
 from platformnet.physics import EXIT, GRID_H, GRID_W, JUMP_VEL, MAX_FALL, MAX_RUN, PLAYER, SOLID, SPIKE, TILE
 from platformnet.run import advance
 
@@ -80,7 +80,8 @@ def generate(count, level_path=None, solid=(0.02, 0.2), spike=0.03, exit_=0.01, 
     """level_path=None makes a new random map for every pair."""
     rng = random.Random(seed)
     if level_path is not None:
-        fixed = (Path(level_path).read_text(), load_level(level_path))
+        level_file = resolve_level(level_path)
+        fixed = (level_file.read_text(), load_level(level_file))
     pairs = []
     while len(pairs) < count:
         made = fixed if level_path is not None else random_level(rng, solid, spike, exit_)

@@ -37,7 +37,7 @@ _OFFSETS = torch.arange(VIEW, dtype=torch.float32) - VIEW / 2 + 0.5
 
 def load_tiles(path=None):
     """A level file -> [100, 100] long tensor of tile codes (spawn counts as empty)."""
-    level = load_level(path) if path else load_level()
+    level = load_level(path)
     return torch.tensor(level.rows, dtype=torch.long)
 
 
