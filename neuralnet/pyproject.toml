@@ -6,11 +6,19 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "numpy>=2.5.4",
-    "torch>=2.14.1",
+    "torch==2.11.0",
 ]
 
 [project.scripts]
 neuralnet = "neuralnet:main"
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
 
 [build-system]
 requires = ["uv_build>=0.13.1,<0.14.0"]
