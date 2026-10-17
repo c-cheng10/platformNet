@@ -9,23 +9,7 @@ from pathlib import Path
 
 from .physics import EMPTY, EXIT, GRID_H, GRID_W, PLAYER, SOLID, SPIKE, TILE
 
-# The one levels folder for the whole repo: <repo>/levels/
-LEVELS_DIR = Path(__file__).resolve().parents[2] / "levels"
-LEVEL_PATH = LEVELS_DIR / "level1.txt"
-
-
-def resolve_level(name=None):
-    """Turn what a user typed into a level file path.
-
-    None -> levels/level1.txt;  "level2" or "level2.txt" -> levels/level2.txt;
-    anything that is already an existing path (or contains a folder) is used as-is.
-    """
-    if name is None:
-        return LEVEL_PATH
-    p = Path(name)
-    if p.exists() or len(p.parts) > 1:
-        return p
-    return LEVELS_DIR / (p.name if p.suffix else p.name + ".txt")
+LEVEL_PATH = Path(__file__).resolve().parent.parent / "levels" / "level2.txt"
 
 CHAR_TO_TILE = {".": EMPTY, "#": SOLID, "X": SPIKE, "E": EXIT, "S": EMPTY}
 
@@ -68,6 +52,5 @@ def parse_level(text):
     return Level(rows, (float(sc * TILE), float(sr * TILE)))
 
 
-def load_level(path=None):
-    """Load a level by name ("level2") or path; default levels/level1.txt."""
-    return parse_level(resolve_level(path).read_text())
+def load_level(path=LEVEL_PATH):
+    return parse_level(Path(path).read_text())
