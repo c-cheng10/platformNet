@@ -4,6 +4,11 @@ import os
 from pathlib import Path
 
 LEVELS_DIR = Path(__file__).resolve().parents[1] / "levels"
+MODEL_PATH = Path(__file__).resolve().parent / "model.pt"
+
+# The model and its pre/post-processing live in neuralnet/train.py
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "neuralnet"))
+from train import run_model
 
 # Initialize Pygame
 pygame.init()
@@ -12,6 +17,11 @@ pygame.init()
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 1000
 TILE_SIZE = 10 # Should be SCREEN_WIDTH/100
+
+# The model works in game units: 5 px tiles and a 10 px (2x2 tile) player, at 60 ticks/s
+GAME_TILE = 5
+GAME_PLAYER = 10
+SCALE = TILE_SIZE / GAME_TILE  # game px -> screen px
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Platformer Renderer")
@@ -41,7 +51,7 @@ def get_start_position(grid):
     """Finds the 'S' starting tile coordinates."""
     for r_idx, row in enumerate(grid):
         if 'S' in row:
-            return [float(row.index('S') * TILE_SIZE), float(r_idx * TILE_SIZE)]
+            return [float(row.index('S') * GAME_TILE), float(r_idx * GAME_TILE)]
     return [0.0, 0.0]
 
 def render_level(surface, grid):
@@ -62,18 +72,35 @@ def render_level(surface, grid):
                 pygame.draw.rect(surface, COLOR_SPIKE, rect)
 
 def render_player(surface, pos):
-    """Renders the player on screen."""
-    player_rect = pygame.Rect(int(pos[0]), int(pos[1]), 2*TILE_SIZE, 2*TILE_SIZE)
+    """Renders the player on screen. pos is in game px."""
+    player_rect = pygame.Rect(int(pos[0] * SCALE), int(pos[1] * SCALE), 2*TILE_SIZE, 2*TILE_SIZE)
     pygame.draw.rect(surface, COLOR_PLAYER, player_rect)
 
+def overlaps(level, pos, char):
+    """True if the player's box at pos strictly overlaps any tile of this type (same rule as the game)."""
+    rows = [line for line in level.splitlines() if line.strip() and not line.startswith(";")]
+    x, y = pos
+    for r in range(int(y // GAME_TILE), int(-(-(y + GAME_PLAYER) // GAME_TILE))):
+        for c in range(int(x // GAME_TILE), int(-(-(x + GAME_PLAYER) // GAME_TILE))):
+            if 0 <= r < len(rows) and 0 <= c < len(rows[r]) and rows[r][c] == char:
+                return True
+    return False
+
 def get_next_frame_raw(data):
-    return {}
+    """One tick through the network. data is in the recording "input" format;
+    returns posx, posy, velx, vely (predicted) plus isDead / isFinished."""
+    out = run_model(data, path=MODEL_PATH)
+    # The network only predicts motion; spikes and the exit are game rules checked on the predicted position
+    pos = (out["posx"], out["posy"])
+    out["isDead"] = int(overlaps(data["LEVEL"], pos, "X"))
+    out["isFinished"] = int(not out["isDead"] and overlaps(data["LEVEL"], pos, "E"))
+    return out
 
 def get_next_frame(right_pressed, left_pressed, up_pressed, position, velocity, level):
     data = get_next_frame_raw({
-                           "shouldRight": 0,
-                           "shouldLeft": 0,
-                           "wantsJump": 1,
+                           "shouldRight": int(right_pressed),
+                           "shouldLeft": int(left_pressed),
+                           "wantsJump": int(up_pressed),
                            "LEVEL": level,
                            "prevposx": position[0],
                            "prevposy": position[1],
@@ -155,7 +182,7 @@ def main():
         render_player(screen, player_pos)
 
         pygame.display.flip()
-        clock.tick(30)
+        clock.tick(60)  # the model was trained on 60 ticks/s physics
 
 if __name__ == "__main__":
     main()
