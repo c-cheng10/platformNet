@@ -6,9 +6,9 @@ import os
 pygame.init()
 
 # --- Configuration ---
-SCREEN_WIDTH = 500
-SCREEN_HEIGHT = 500
-TILE_SIZE = 5  # 100x100 grid fits a 500x500 screen perfectly
+SCREEN_WIDTH = 1000
+SCREEN_HEIGHT = 1000
+TILE_SIZE = 10 # 100x100 grid fits a 500x500 screen perfectly
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Platformer Renderer")
