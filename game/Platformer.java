@@ -1,5 +1,4 @@
 /**
- * Author: Zia Merchant
  * Date: May/June 2026
  * Subject: Startup for game class
  */
