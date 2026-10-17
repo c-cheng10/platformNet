@@ -3,6 +3,7 @@
     python train.py                          # every recording in ../game_py/recordings
     python train.py some/dir run1.json ...   # specific files / directories
     python train.py --epochs 50 --batch-size 32 --lr 3e-4 --out model.pt
+    python train.py --latest                 # newest dataset in ../game_py/generated
 
 Each recording is a list of {"input": {...}, "output": {...}} pairs, one per tick.
 
@@ -32,6 +33,7 @@ from torch.utils.data import DataLoader, TensorDataset, random_split
 from model import CROP, HALF, LEVEL_SIZE, NextStatePredictor
 
 RECORDINGS_DIR = Path(__file__).resolve().parent.parent / "game_py" / "recordings"
+GENERATED_DIR = Path(__file__).resolve().parent.parent / "game_py" / "generated"
 
 # Must match the tile codes in game_py/platformnet/physics.py (EMPTY, SOLID, EXIT, SPIKE = range(4)).
 # Spawn ("S") is empty for physics.
@@ -77,6 +79,14 @@ def find_recordings(paths):
         jsons = sorted(p.glob("*.json"))
         files += jsons + [gz for gz in sorted(p.glob("*.json.gz")) if gz.with_suffix("") not in jsons]
     return files
+
+
+def latest_generated():
+    """The most recently written dataset in game_py/generated (generate_data.py / generate_clumped_data.py)"""
+    files = list(GENERATED_DIR.glob("*.json")) + list(GENERATED_DIR.glob("*.json.gz"))
+    if not files:
+        raise SystemExit(f"no datasets in {GENERATED_DIR}")
+    return max(files, key=lambda f: f.stat().st_mtime)
 
 
 def read_pairs(path):
@@ -165,6 +175,7 @@ def run_model(inputs, path="model.pt"):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("paths", nargs="*", default=[RECORDINGS_DIR], help="recording files or directories")
+    parser.add_argument("--latest", action="store_true", help="train on the newest dataset in game_py/generated")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-3)
@@ -185,7 +196,7 @@ def main():
             torch.cuda.synchronize()
 
     load_start = time.perf_counter()
-    files = find_recordings(args.paths)
+    files = [latest_generated()] if args.latest else find_recordings(args.paths)
     crops, extra, prev, nxt, n_levels = load_recordings(files)
     print(f"{len(crops)} frames from {len(files)} recording(s), {n_levels} distinct level(s), "
           f"loaded in {time.perf_counter() - load_start:.1f}s")
