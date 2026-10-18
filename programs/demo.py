@@ -97,43 +97,104 @@ class WorldModel:
                 hit |= ok & (self.grid[r.clamp(0, 99), c.clamp(0, 99)] == code)
         return hit
 
+    def measure_jump(self):
+        """Ask the model how high the player can jump: imagine one jump on an empty flat floor.
+        Returns (apex height in px, gravity in px/tick^2) as the network sees them."""
+        flat = torch.zeros(100, 100, dtype=torch.uint8)
+        flat[90:] = SOLID
+        padded, self.padded = self.padded, pad_level(flat)
+        state = torch.tensor([[250.0, 90 * TILE - PLAYER, 0.0, 0.0]])
+        ys, vys = [], []
+        for t in range(40):
+            state = self.step(state, torch.tensor([[0.0, 0.0, float(t == 0)]]))  # tap jump once
+            ys.append(state[0, 1].item())
+            vys.append(state[0, 3].item())
+        self.padded = padded
+        rising = [b - a for a, b in zip(vys, vys[1:]) if a < 0 and b < 0]
+        return 90 * TILE - PLAYER - min(ys), sum(rising) / len(rising)
+
     def route_distance(self):
-        """(99, 99) tiles from each player position (its top-left tile) to the exit, walking through open space
-        around walls and spikes, ignoring gravity. Straight-line distance would make the planner bang into
-        any wall between the player and the exit instead of going around (e.g. up and over, in level4)."""
-        n = 100 - PLAYER // TILE + 1
+        """(n, n, J+1) moves from each player position (its top-left tile) to the exit, for each amount of
+        jump height left (in tiles), through a tile graph that respects what jumping can do:
+          - standing on solid refills the budget to a full jump (J tiles, measured from the model)
+          - while there is budget left you can go up, up-diagonally or sideways, each costing one tile
+          - with none left you can only fall: down or down-diagonally
+        Plain open-space distance would route straight up walls and shafts, which no jump can follow."""
+        apex, self.gravity = self.measure_jump()
+        J = self.jump_tiles = int(apex // TILE)
+        k = PLAYER // TILE
+        n = 100 - k + 1
         blocked = (self.grid == SOLID) | (self.grid == SPIKE)
-        exit_ = self.grid == EXIT
+        solid = torch.cat([self.grid == SOLID, torch.ones(1, 100, dtype=torch.bool)])  # below the grid is solid
         fits = torch.zeros(n, n, dtype=torch.bool)
         at_exit = torch.zeros(n, n, dtype=torch.bool)
-        for dr in range(PLAYER // TILE):
-            for dc in range(PLAYER // TILE):
+        ground = torch.zeros(n, n, dtype=torch.bool)
+        for dr in range(k):
+            for dc in range(k):
                 fits |= blocked[dr:dr + n, dc:dc + n]
-                at_exit |= exit_[dr:dr + n, dc:dc + n]
-        fits = ~fits
-        dist = torch.full((n, n), UNREACHABLE)
+                at_exit |= (self.grid == EXIT)[dr:dr + n, dc:dc + n]
+        for dc in range(k):
+            ground |= solid[k:k + n, dc:dc + n]
+        fits = (~fits).tolist()
+        ground = [[g and f for g, f in zip(gr, fr)] for gr, fr in zip(ground.tolist(), fits)]
+        self.ground = ground
+
+        def ok(r, c, dr, dc):
+            nr, nc = r + dr, c + dc
+            if not (0 <= nr < n and 0 <= nc < n and fits[nr][nc]):
+                return False
+            return dr == 0 or dc == 0 or fits[r + dr][c] or fits[r][c + dc]  # don't squeeze through corners
+
+        # Build the graph backwards (who can reach me), then BFS out from the exit
+        preds = {}
+        for r in range(n):
+            for c in range(n):
+                if not fits[r][c]:
+                    continue
+                for j in ([J] if ground[r][c] else range(J + 1)):
+                    moves = [(1, 0, 0), (1, -1, 0), (1, 1, 0)]  # falling
+                    if ground[r][c]:
+                        moves += [(0, -1, None), (0, 1, None), (-1, 0, J - 1), (-1, -1, J - 1), (-1, 1, J - 1)]
+                    elif j > 0:
+                        moves += [(0, -1, j - 1), (0, 1, j - 1), (-1, 0, j - 1), (-1, -1, j - 1), (-1, 1, j - 1)]
+                    for dr, dc, nj in moves:
+                        if not ok(r, c, dr, dc):
+                            continue
+                        nr, nc = r + dr, c + dc
+                        nj = J if ground[nr][nc] else (0 if nj is None else nj)  # walking off a ledge = falling
+                        preds.setdefault((nr, nc, nj), []).append((r, c, j))
+        dist = torch.full((n, n, J + 1), UNREACHABLE)
         queue = deque()
-        for r, c in (at_exit & fits).nonzero().tolist():
-            dist[r, c] = 0
-            queue.append((r, c))
+        for r, c in (at_exit & torch.tensor(fits)).nonzero().tolist():
+            for j in range(J + 1):
+                dist[r, c, j] = 0
+                queue.append((r, c, j))
+        d = dist.tolist()
         while queue:
-            r, c = queue.popleft()
-            for nr, nc in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)):
-                if 0 <= nr < n and 0 <= nc < n and fits[nr, nc] and dist[nr, nc] == UNREACHABLE:
-                    dist[nr, nc] = dist[r, c] + 1
-                    queue.append((nr, nc))
-        return dist
+            node = queue.popleft()
+            r, c, j = node
+            for pr, pc, pj in preds.get(node, ()):
+                if d[pr][pc][pj] == UNREACHABLE:
+                    d[pr][pc][pj] = d[r][c][j] + 1
+                    queue.append((pr, pc, pj))
+        return torch.tensor(d)
 
     def heuristic(self, state):
-        """Rough ticks to the exit along the open route, at full run speed. Looks at the tiles around the
-        player's top-left, so a state the model put a hair inside a wall still gets a sensible score."""
-        n = self.dist.shape[0]
+        """Rough ticks to the exit along a route jumps can actually follow, at full run speed. The jump
+        budget comes from the state: a full jump if standing, what's left of the rise if going up, else none.
+        Looks at the tiles around the player's top-left, so a state a hair inside a wall still gets a score."""
+        n, J = self.dist.shape[0], self.jump_tiles
         r = torch.floor(state[:, 1] / TILE).long()
         c = torch.floor(state[:, 0] / TILE).long()
+        vy = state[:, 3]
+        rise = torch.where(vy < 0, vy * vy / (2 * self.gravity), 0.0)
+        j = torch.clamp(torch.floor(rise / TILE).long(), 0, J)
         best = torch.full((len(state),), UNREACHABLE)
         for dr in (0, 1):
             for dc in (0, 1):
-                best = torch.minimum(best, self.dist[(r + dr).clamp(0, n - 1), (c + dc).clamp(0, n - 1)])
+                rr, cc = (r + dr).clamp(0, n - 1), (c + dc).clamp(0, n - 1)
+                standing = torch.tensor([self.ground[a][b] for a, b in zip(rr.tolist(), cc.tolist())]) & (vy.abs() < 1)
+                best = torch.minimum(best, self.dist[rr, cc, torch.where(standing, J, j)])
         return best * TILE / MAX_RUN
 
 
