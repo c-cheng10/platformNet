@@ -1,9 +1,4 @@
 @echo off
-rem Play the neural game (programs\render.py): the physics runs inside the trained model.
-rem   play.bat        GPU build of PyTorch (NVIDIA + CUDA)
-rem   play.bat cpu    CPU-only PyTorch (any computer)
-rem With uv (https://docs.astral.sh/uv/) the first run installs everything into training\.venv.
-rem Without uv it falls back to the first Python that already has torch, pygame and numpy.
 cd /d "%~dp0"
 
 where uv >nul 2>nul

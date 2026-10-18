@@ -14,11 +14,11 @@ from platformnet.run import advance
 GENERATED_DIR = Path(__file__).resolve().parent / "generated"
 DEFAULT_LEVEL_PATH = LEVEL_PATH
 
-MAX_X = GRID_W * TILE - PLAYER  # Furthest x the player can be placed at
-MAX_Y = GRID_H * TILE - PLAYER  # Furthest y the player can be placed at
-SIZE = PLAYER // TILE           # Player size in tiles
-TRIES = 1000                    # Placement attempts before giving up on a map
-MAX_FIXED_MISSES = 100          # Failed placements allowed on real levels before erroring
+MAX_X = GRID_W * TILE - PLAYER
+MAX_Y = GRID_H * TILE - PLAYER
+SIZE = PLAYER // TILE
+TRIES = 1000
+MAX_FIXED_MISSES = 100
 TILE_TO_CHAR = {EMPTY: ".", SOLID: "#", EXIT: "E", SPIKE: "X"}
 
 
@@ -29,7 +29,6 @@ def is_free(state, level):
 
 
 def is_area_empty(tiles, col, row):
-    # Check every tile in the SIZE x SIZE square starting at (col, row)
     for r in range(row, row + SIZE):
         for c in range(col, col + SIZE):
             if tiles[r][c] != EMPTY:
@@ -38,7 +37,6 @@ def is_area_empty(tiles, col, row):
 
 
 def clear_spots(tiles):
-    # Last row/col where the player's square still fits inside the grid
     last_row = GRID_H - SIZE
     last_col = GRID_W - SIZE
 
@@ -106,11 +104,11 @@ def random_grounded_state(level, rng):
     for _ in range(TRIES):
         x = rng.uniform(0, MAX_X)
         floor_row = rng.randrange(SIZE, GRID_H)
-        y = float(floor_row * TILE - PLAYER)  # Feet resting on top of floor_row
+        y = float(floor_row * TILE - PLAYER)
         state = (x, y, rng.uniform(-MAX_RUN, MAX_RUN), 0.0)
 
         first_col = int(x // TILE)
-        last_col = int(-(-(x + PLAYER) // TILE))  # ceil((x + PLAYER) / TILE)
+        last_col = int(-(-(x + PLAYER) // TILE))
         on_floor = any(level.tile(c, floor_row) == SOLID for c in range(first_col, last_col))
 
         if on_floor and is_free(state, level):

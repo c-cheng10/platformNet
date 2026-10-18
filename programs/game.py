@@ -13,14 +13,13 @@ from pathlib import Path
 
 import pygame
 
-# the engine (platformnet) lives in <repo>/game_py
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "game_py"))
-from platformnet.level import load_level  # noqa: E402
+from platformnet.level import load_level
 from platformnet.physics import EXIT, GRID_H, GRID_W, PLAYER, SOLID, SPIKE, TICK_HZ, TILE
 from platformnet.run import advance, spawn_state
 
 ASSETS = Path(__file__).resolve().parents[1] / "assets" / "sprites"
-SCREEN = (GRID_W * TILE, GRID_H * TILE)  # 500 x 500
+SCREEN = (GRID_W * TILE, GRID_H * TILE)
 COLORS = {"bg": (0xBC, 0xDF, 0xFF), SOLID: (0, 0, 0), EXIT: (60, 200, 90), "hud": (0, 0, 0)}
 
 
@@ -51,7 +50,6 @@ def main(level_path=None, recorder=None):
     pygame.display.set_caption("platformNet - real engine")
     font = pygame.font.SysFont("consolas", 14, bold=True)
     clock = pygame.time.Clock()
-    # The sprite is drawn exactly the size of the hitbox (the Java game drew 40px over 5px).
     player_img = pygame.transform.smoothscale(pygame.image.load(ASSETS / "player.png").convert_alpha(), (PLAYER, PLAYER))
     spike_img = pygame.transform.smoothscale(pygame.image.load(ASSETS / "spike.png").convert_alpha(), (TILE, TILE))
     background = render_level(level, spike_img)

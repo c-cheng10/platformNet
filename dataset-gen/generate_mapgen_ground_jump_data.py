@@ -13,8 +13,8 @@ from platformnet.level import parse_level, resolve_level
 from platformnet.physics import SOLID
 from platformnet.run import advance
 
-GROUNDED = 1.0  # Share of pairs starting on a floor; the rest start in the air
-JUMP = 0.75     # Share of pairs holding jump
+GROUNDED = 1.0
+JUMP = 0.75
 
 
 def grounded_mapgen_levels(count, rng, flat=FLAT):
@@ -24,7 +24,6 @@ def grounded_mapgen_levels(count, rng, flat=FLAT):
         for tiles in make_maps_np(count - len(levels), seed=rng.randrange(2**32)):
             tiles = tiles.tolist()
 
-            # Redraw maps with nowhere flat enough to spawn
             spots = flat_spots(tiles, flat)
             if not spots:
                 continue
@@ -37,7 +36,6 @@ def grounded_mapgen_levels(count, rng, flat=FLAT):
 
 
 def random_action(rng, jump):
-    # Move left, stay or right; hold jump with probability `jump`
     move = rng.choice((-1, 0, 1))
     wants_jump = int(rng.random() < jump)
     return (move, wants_jump)
@@ -53,7 +51,6 @@ def generate(count, maps=100, grounded=GROUNDED, jump=JUMP, seed=None, flat=FLAT
 
     while len(pairs) < count:
 
-        # Every level is equally likely
         index = rng.randrange(len(levels))
         level = levels[index][1]
 
@@ -62,7 +59,6 @@ def generate(count, maps=100, grounded=GROUNDED, jump=JUMP, seed=None, flat=FLAT
         else:
             state = random_air_state(level, rng)
 
-        # No valid spot found this time (rare); draw again
         if state is None:
             continue
 
@@ -84,7 +80,6 @@ def save(levels, pairs):
 
 
 def save_preview(name, seed, flat):
-    # Write one map to levels/NAME.txt so it can be opened in level_editor.py
     path = resolve_level(name)
     text, _ = grounded_mapgen_levels(1, random.Random(seed), flat)[0]
     path.write_text(text)
@@ -106,7 +101,6 @@ def parse_args():
                         help="Just write one map to levels/NAME.txt (open it in level_editor.py) and exit")
     args = parser.parse_args()
 
-    # Preview mode skips the other checks
     if args.preview:
         return args
 

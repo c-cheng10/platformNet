@@ -3,12 +3,10 @@ import sys
 import time
 from pathlib import Path
 
-# platformnet (the engine) and game.py live in <repo>/game_py
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "game_py"))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "programs"))  # game.py
-from platformnet.level import LEVEL_PATH, resolve_level  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "programs"))
+from platformnet.level import LEVEL_PATH, resolve_level
 
-# Folder where game recordings are saved
 RECORDINGS_DIR = Path(__file__).resolve().parent / "recordings"
 
 
@@ -41,7 +39,6 @@ def make_pair(level, state, action, next_state, dead, finished):
 
 class GameRecorder:
     def __init__(self, level_path=LEVEL_PATH, out_dir=RECORDINGS_DIR):
-        # Load the level design
         self.level_text = resolve_level(level_path).read_text()
         self.out_dir = Path(out_dir)
         self.pairs = []

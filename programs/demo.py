@@ -30,30 +30,30 @@ import torch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "training"))
 sys.path.insert(0, str(ROOT / "game_py"))
-from model import CROP, HALF, NextStatePredictor  # noqa: E402
-from train import PAD, normalize_extra, pad_level, parse_level  # noqa: E402
-from platformnet.level import load_level, resolve_level  # noqa: E402
-from platformnet.run import advance, spawn_state  # noqa: E402
+from model import CROP, HALF, NextStatePredictor
+from train import PAD, normalize_extra, pad_level, parse_level
+from platformnet.level import load_level, resolve_level
+from platformnet.run import advance, spawn_state
 
 MODEL_PATH = ROOT / "models" / "model_b128_e100_noise2_p30.pt"
 
 TICK_HZ = 60
-TILE = 5            # game px per tile
-PLAYER = 10         # game px
+TILE = 5
+PLAYER = 10
 LEVEL_PX = 100 * TILE
-SOLID, EXIT, SPIKE = 1, 2, 3  # train.CHAR_TO_TILE codes
-MAX_RUN = 3.3       # px/tick, only used to rank which imagined futures look closest to the exit
-UNREACHABLE = 1e4   # route distance (tiles) for places the exit can't be walked to from
+SOLID, EXIT, SPIKE = 1, 2, 3
+MAX_RUN = 3.3
+UNREACHABLE = 1e4
 
-ACTIONS = [(d, j) for j in (0, 1) for d in (1, 0, -1)]  # (input_dir, jump)
-HOLD = 4            # ticks each planned action is held
-BATCH = 64          # nodes expanded per search step (x 6 actions = one model batch)
-MAX_STEPS = 500     # search steps per plan (each is a few model batches, ~0.4s on CPU)
-EXECUTE = 30        # ticks of each plan run on the real engine before replanning
-REPLAN_DIST = 2.0   # px: replan early once reality is this far from the model's prediction
+ACTIONS = [(d, j) for j in (0, 1) for d in (1, 0, -1)]
+HOLD = 4
+BATCH = 64
+MAX_STEPS = 500
+EXECUTE = 30
+REPLAN_DIST = 2.0
 MAX_TICKS = 60 * TICK_HZ
 MAX_DEATHS = 5
-SCALE = 2           # screen px per game px
+SCALE = 2
 
 
 class WorldModel:
@@ -79,7 +79,6 @@ class WorldModel:
         crops = self.padded[rows[:, :, None], cols[:, None, :]]
         extra = torch.cat([keys, (state[:, :2] % TILE) / TILE, state[:, 2:]], dim=1)
         out = state + self.model(crops, normalize_extra(extra, self.stats)) * self.stats["delta_std"] + self.stats["delta_mean"]
-        # Same screen clamp as render.py
         pos = out[:, :2].clamp(0, LEVEL_PX - PLAYER)
         vel = torch.where(pos == out[:, :2], out[:, 2:], 0.0)
         return torch.cat([pos, vel], dim=1)
@@ -144,8 +143,8 @@ def plan(wm, start):
     so the search can be drawn live, then returns ([(predicted_state, action), ...] per tick, reached_exit,
     search steps). If the exit isn't reached within MAX_STEPS, returns the path to the imagined state that
     got closest to it."""
-    nodes = [(None, None, [torch.tensor(start, dtype=torch.float32)])]  # (parent index, action, states during this hold)
-    frontier = [(0.0, 0, 0)]  # (f, g, node index)
+    nodes = [(None, None, [torch.tensor(start, dtype=torch.float32)])]
+    frontier = [(0.0, 0, 0)]
     seen = set()
     best, best_h = 0, float("inf")
     for it in range(MAX_STEPS):
@@ -155,7 +154,7 @@ def plan(wm, start):
         state = torch.stack([nodes[i][2][-1] for _, _, i in batch]).repeat_interleave(len(ACTIONS), 0)
         keys = torch.tensor([[d < 0, d > 0, j] for d, j in ACTIONS], dtype=torch.float32).repeat(len(batch), 1)
         alive = torch.ones(len(state), dtype=torch.bool)
-        won = torch.zeros(len(state), dtype=torch.long)  # tick (1-based) the exit was reached, 0 = not yet
+        won = torch.zeros(len(state), dtype=torch.long)
         trace = []
         for t in range(HOLD):
             state = torch.where((alive & (won == 0))[:, None], wm.step(state, keys), state)
@@ -272,8 +271,6 @@ def main():
     def center(s):
         return ((s[0] + PLAYER / 2) * SCALE, (s[1] + PLAYER / 2) * SCALE)
 
-    # Every path the planner gives up on during a search is blended into `history` as a faint red line,
-    # building up a picture of what the model considered and dropped. Cleared when the next search starts.
     history = background.copy()
     scratch = pygame.Surface(size, pygame.SRCALPHA)
 
@@ -305,13 +302,13 @@ def main():
         pygame.display.flip()
         nonlocal drawn
         drawn += 1
-        if args.gif and (drawn % 2 or last):  # every other frame at half size, so a long run fits in memory
+        if args.gif and (drawn % 2 or last):
             frames.append(pygame.transform.smoothscale(screen, (size[0] // 2, size[1] // 2)))
 
     dot = pygame.Surface((3, 3), pygame.SRCALPHA)
     dot.fill((40, 90, 230, 110))
     trail, explored, path, frames = [], [], [], []
-    run = []  # (real state, keys, died) every tick, for the clean replay
+    run = []
     drawn, last, quit_early = 0, False, False
     plans, err, status, keys = 0, 0.0, "", "     "
     for kind, state, info in play(level, wm, args.execute):
@@ -320,7 +317,6 @@ def main():
             break
         if kind == "planning":
             trail.append(center(state))
-            # The last plan has been executed: clear its rejected paths so the new search starts clean
             explored, searched, path = [], 0, []
             history.blit(background, (0, 0))
             continue
@@ -359,15 +355,14 @@ def main():
 
     if args.gif and frames:
         from PIL import Image
-        frames += [frames[-1]] * 30  # linger on the last frame
+        frames += [frames[-1]] * 30
         imgs = [Image.frombytes("RGB", f.get_size(), pygame.image.tobytes(f, "RGB")) for f in frames]
         imgs[0].save(args.gif, save_all=True, append_images=imgs[1:], duration=1000 * 2 // TICK_HZ, loop=0)
         print(f"wrote {args.gif} ({len(imgs)} frames)")
 
-    # Replay just the real run, at real speed, without the planning, until the window is closed
     while not (args.headless or quit_early) and run:
         replay_trail = [center(spawn_state(level))]
-        for state, keys, died in run + [run[-1]] * TICK_HZ:  # hold the last frame for a second
+        for state, keys, died in run + [run[-1]] * TICK_HZ:
             if any(ev.type == pygame.QUIT or (ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE)
                    for ev in pygame.event.get()):
                 pygame.quit()

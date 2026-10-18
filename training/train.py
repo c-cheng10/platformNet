@@ -42,13 +42,11 @@ RECORDINGS_DIR = Path(__file__).resolve().parent.parent / "dataset-gen" / "recor
 GENERATED_DIR = Path(__file__).resolve().parent.parent / "dataset-gen" / "generated"
 MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 
-# Must match the tile codes in game_py/platformnet/physics.py (EMPTY, SOLID, EXIT, SPIKE = range(4)).
-# Spawn ("S") is empty for physics.
 CHAR_TO_TILE = {".": 0, "#": 1, "E": 2, "X": 3, "S": 0}
 SOLID = 1
-TILE = 5  # px per tile
-PAD = CROP  # solid border added around the level, so crops near (or past) the edge stay in bounds
-NOISE_MARGIN = 1  # extra tiles stored around each training crop, so input noise can move the player a tile
+TILE = 5
+PAD = CROP
+NOISE_MARGIN = 1
 
 KEYS = ("shouldLeft", "shouldRight", "wantsJump")
 PREV_STATE = ("prevposx", "prevposy", "prevvelx", "prevvely")
@@ -117,7 +115,7 @@ def read_pairs(path):
 def load_recordings(files, margin=0):
     """-> crops (N,32+2*margin,32+2*margin) uint8, extra (N,7), prev (N,4), next (N,4), number of distinct levels.
     Death frames are skipped."""
-    level_cache = {}  # many frames share a level; parse and pad each one once
+    level_cache = {}
     crops, extra, prev, nxt = [], [], [], []
     for f in files:
         for level_text, pair in read_pairs(f):
@@ -126,8 +124,6 @@ def load_recordings(files, margin=0):
                 continue
             if level_text not in level_cache:
                 level_cache[level_text] = pad_level(parse_level(level_text))
-            # Rounded to float32 first, so the crop's tile agrees with the stored prev tensor
-            # (74.99999999999997 is tile 14 as a double but 75.0, tile 15, as a float32)
             p = torch.tensor([i[k] for k in PREV_STATE], dtype=torch.float32).tolist()
             crop, e = frame_inputs(level_cache[level_text], [i[k] for k in KEYS], p, margin)
             crops.append(crop)
@@ -139,7 +135,6 @@ def load_recordings(files, margin=0):
 
 
 def normalize_extra(extra, s):
-    # keys and frac are already 0-1; only the velocity needs standardizing
     return torch.cat([extra[:, :5], (extra[:, 5:] - s["vel_mean"]) / s["vel_std"]], dim=1)
 
 
@@ -157,7 +152,7 @@ def shift_crops(crops, prev, noisy):
     """crops are cut around the clean position with NOISE_MARGIN extra tiles per side; returns the
     (B,32,32) window around the noisy position, i.e. what frame_inputs would have cut for it."""
     tile = lambda p: torch.floor(p[:, :2] / TILE).long()
-    shift = (tile(noisy) - tile(prev)).clamp(-NOISE_MARGIN, NOISE_MARGIN) + NOISE_MARGIN  # (B,2) [col, row]
+    shift = (tile(noisy) - tile(prev)).clamp(-NOISE_MARGIN, NOISE_MARGIN) + NOISE_MARGIN
     ar = torch.arange(CROP, device=crops.device)
     cols, rows = shift[:, :1] + ar, shift[:, 1:] + ar
     return crops[torch.arange(len(crops), device=crops.device)[:, None, None], rows[:, :, None], cols[:, None, :]]
@@ -190,7 +185,7 @@ def load_predictor(path=MODELS_DIR / "model.pt", device="cpu"):
     return predict
 
 
-_predictors = {}  # checkpoint path -> predict(), so the model is only loaded once
+_predictors = {}
 
 
 def run_model(inputs, path=MODELS_DIR / "model.pt"):
@@ -226,7 +221,6 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     def sync():
-        # CUDA runs asynchronously; wait for it so the timings land in the right bucket
         if device == "cuda":
             torch.cuda.synchronize()
 
@@ -240,7 +234,6 @@ def main():
     dataset = TensorDataset(crops, extra, prev, nxt)
     train_set, val_set = random_split(dataset, [len(crops) - n_val, n_val])
 
-    # Normalization stats come from the training split only
     idx = torch.tensor(train_set.indices)
     vel_mean, vel_std = mean_std(prev[idx, 2:])
     delta_mean, delta_std = mean_std((nxt - prev)[idx])
@@ -249,7 +242,6 @@ def main():
 
     def to_batch(batch, noisy=False):
         big, e, p, n = (t.to(device) for t in batch)
-        # Validation stays clean, so its numbers are comparable to runs without noise
         p_in = add_noise(p, args.noise_frac, args.pos_noise, args.vel_noise) if noisy and args.noise_frac > 0 else p
         level = shift_crops(big, p, p_in)
         e = torch.cat([e[:, :3], (p_in[:, :2] % TILE) / TILE, p_in[:, 2:]], dim=1)
@@ -257,7 +249,6 @@ def main():
         target = ((n - p_in) - stats_dev["delta_mean"]) / stats_dev["delta_std"]
         return level, extra, target, p_in, n
 
-    # drop_last: BatchNorm can't train on a batch of one
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, drop_last=len(train_set) > args.batch_size)
     val_loader = DataLoader(val_set, batch_size=256)
 
@@ -273,39 +264,33 @@ def main():
         data_time = train_time = eval_time = 0.0
         t = time.perf_counter()
         for batch in train_loader:
-            # data: fetching the batch from the DataLoader + normalizing / moving it to the device
             level, extra, target, _, _ = to_batch(batch, noisy=True)
             sync()
             data_time += time.perf_counter() - t
             t = time.perf_counter()
 
-            # train: forward, backward, optimizer step
             loss = model.loss(level, extra, target)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            train_loss += loss.item() * len(level)  # .item() also waits for the GPU
+            train_loss += loss.item() * len(level)
             seen += len(level)
             train_time += time.perf_counter() - t
             t = time.perf_counter()
         train_loss /= seen
         scheduler.step()
 
-        # Validation, also reported in real units: mean absolute error of x, y (px) and vx, vy (px/tick),
-        # plus the straight-line position error
         model.eval()
         val_loss = dist_err = 0.0
         abs_err = torch.zeros(4, device=device)
         with torch.no_grad():
             t = time.perf_counter()
             for batch in val_loader:
-                # data, same as in training
                 level, extra, target, p, n = to_batch(batch)
                 sync()
                 data_time += time.perf_counter() - t
                 t = time.perf_counter()
 
-                # eval: forward pass + metrics
                 out = model(level, extra)
                 val_loss += F.mse_loss(out, target).item() * len(level)
                 pred = p + out * stats_dev["delta_std"] + stats_dev["delta_mean"]

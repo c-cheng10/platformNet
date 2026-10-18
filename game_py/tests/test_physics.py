@@ -17,8 +17,8 @@ def level(solid=(), spike=()):
     return parse_level("\n".join("".join(r) for r in g))
 
 
-FLOOR = (0, 90, 99, 99)  # floor top at y=450
-GROUND = 450.0 - PLAYER  # y of a player standing on FLOOR
+FLOOR = (0, 90, 99, 99)
+GROUND = 450.0 - PLAYER
 
 
 def run(state, action, lv, n):
@@ -37,7 +37,7 @@ def test_landing_snaps_exactly_and_grounded_is_derivable():
 
 
 def test_wall_contact_is_exact():
-    lv = level(solid=[FLOOR, (60, 0, 60, 89)])  # wall face at x=300
+    lv = level(solid=[FLOOR, (60, 0, 60, 89)])
     for x0 in (100.0, 250.0, 283.7):
         s = run((x0, GROUND, 0, 0), (1, 0), lv, 300)
         assert s[0] == 300 - PLAYER and s[2] == 0
@@ -54,7 +54,7 @@ def test_fall_speed_is_capped():
 
 
 def test_no_tunnelling_through_thin_floor_at_max_fall():
-    lv = level(solid=[(30, 60, 60, 60)])  # 5px ledge at y=300
+    lv = level(solid=[(30, 60, 60, 60)])
     s = run((200.0, 3.0, 0.0, MAX_FALL), (0, 0), lv, 100)
     assert s[1] == 300 - PLAYER
 
@@ -68,7 +68,7 @@ def test_no_tunnelling_through_thin_wall_at_top_speed():
 def test_jump_is_fixed_height():
     lv = level(solid=[FLOOR])
     apexes = []
-    for hold in (1, 5, 200):  # releasing early must not change the height
+    for hold in (1, 5, 200):
         s = step((200.0, GROUND, 0, 0), (0, 1), lv)
         assert s[3] < 0
         top = s[1]
@@ -76,18 +76,18 @@ def test_jump_is_fixed_height():
             s = step(s, (0, 1 if t < hold and s[1] < GROUND else 0), lv)
             top = min(top, s[1])
         apexes.append(GROUND - top)
-    assert apexes[0] == apexes[1] == apexes[2] and 50 < apexes[0] < 60  # ~55 px
+    assert apexes[0] == apexes[1] == apexes[2] and 50 < apexes[0] < 60
 
 
 def test_releasing_in_air_keeps_momentum_but_drags_more_than_holding():
     lv = level(solid=[FLOOR])
-    s = run((50.0, GROUND, 0, 0), (1, 0), lv, 30)       # run to top speed
-    s = step(s, (1, 1), lv)                             # jump
+    s = run((50.0, GROUND, 0, 0), (1, 0), lv, 30)
+    s = step(s, (1, 1), lv)
     held = run(s, (1, 0), lv, 10)
     released = run(s, (0, 0), lv, 10)
-    assert held[2] > released[2] > 0.5 * s[2]           # keeps most speed, but less than holding
+    assert held[2] > released[2] > 0.5 * s[2]
     assert abs(released[2] - s[2] * (1 - AIR_RESISTANCE) ** 10) < 1e-9
-    assert abs(held[2] - MAX_RUN) < 1e-9                # holding balances drag at running speed
+    assert abs(held[2] - MAX_RUN) < 1e-9
 
 
 def test_ground_decelerates_at_mu_times_ground_accel():
@@ -107,7 +107,7 @@ def test_material_friction_controls_grip(monkeypatch):
             s, n = step(s, (1, 0), lv), n + 1
         return n
     normal = ticks_to_top_speed()
-    monkeypatch.setitem(FRICTION, SOLID, 0.25)          # slippery version of the same floor
+    monkeypatch.setitem(FRICTION, SOLID, 0.25)
     assert ground_friction(50.0, GROUND, lv) == 0.25
     assert ticks_to_top_speed() > 3 * normal
 

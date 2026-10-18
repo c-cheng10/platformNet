@@ -17,14 +17,12 @@ def generate(count, level_names=DEFAULT_LEVELS, level_share=0.4, maps=100, groun
     paths = [resolve_level(name) for name in level_names] if level_share > 0 else []
     fixed = [(p.read_text(), load_level(p)) for p in paths]
     
-    # Calculate how many random clumped maps to generate
     n_random = maps - len(fixed) if level_share < 1 else 0
     levels = fixed + clumped_levels(n_random, rng)
     
     pairs = []
     misses = [0] * len(fixed)
 
-    # Generate pairs until we hit the target count
     while len(pairs) < count:
         use_fixed = bool(fixed) and (not n_random or rng.random() < level_share)
         index = rng.randrange(len(fixed)) if use_fixed else len(fixed) + rng.randrange(n_random)
@@ -42,7 +40,6 @@ def generate(count, level_names=DEFAULT_LEVELS, level_share=0.4, maps=100, groun
                     raise ValueError(f"No valid start position found in {paths[index]}")
             continue
 
-        # Simulate a random action and record the resulting pair
         action = (rng.choice((-1, 0, 1)), rng.choice((0, 1)))
         _, dead, new_state, finished = advance(state, action, level)
         pairs.append(make_pair(index, state, action, new_state, dead, finished))
@@ -64,7 +61,6 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    # Validate command-line arguments
     if not 0 <= args.level_share <= 1:
         parser.error("--level-share must be between 0 and 1")
     if 0 < args.level_share < 1 and args.maps <= len(args.levels):
@@ -72,7 +68,6 @@ if __name__ == "__main__":
     if args.level_share == 0 and args.maps < 1:
         parser.error("--maps must be at least 1")
 
-    # Generate data and save to a minified JSON file
     levels, pairs = generate(args.count, args.levels, args.level_share, args.maps, args.grounded, args.seed)
     
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)

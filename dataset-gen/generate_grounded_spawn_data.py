@@ -11,21 +11,18 @@ from platformnet.physics import EMPTY, GRID_H, GRID_W, SOLID, TILE
 from platformnet.run import advance
 
 DEFAULT_LEVELS = ("level1", "level2", "level3")
-FLAT = 6         # Minimum width, in tiles, of the flat floor a spawn stands on
-MAX_MISSES = 100 # Failed placements allowed per real level before erroring
+FLAT = 6
+MAX_MISSES = 100
 
 
 def flat_width(level):
-    # Width in tiles of the flat floor under the spawn, or 0 if the spawn isn't standing on solid ground
 
-    # Spawn must not overlap a wall, spike or exit
     if not is_reachable(level.spawn, level):
         return 0
 
     spawn_c = int(level.spawn[0] // TILE)
     spawn_r = int(level.spawn[1] // TILE)
 
-    # A column is standable if it's solid just below the player and empty for the player's height
     def standable(c):
         if level.tile(c, spawn_r + SIZE) != SOLID:
             return False
@@ -34,12 +31,10 @@ def flat_width(level):
                 return False
         return True
 
-    # Every column under the player must be standable
     for c in range(spawn_c, spawn_c + SIZE):
         if not standable(c):
             return 0
 
-    # Grow the floor left and right as far as it stays standable
     left = spawn_c
     right = spawn_c + SIZE - 1
     while standable(left - 1):
@@ -50,7 +45,6 @@ def flat_width(level):
 
 
 def is_standable(tiles, c, r):
-    # Player's top-left at (c, r): column c must be empty for the player's height with solid floor below
     if tiles[r + SIZE][c] != SOLID:
         return False
     for pr in range(r, r + SIZE):
@@ -60,10 +54,8 @@ def is_standable(tiles, c, r):
 
 
 def flat_spots(tiles, flat):
-    # Top-left (c, r) of every spot where the player stands on at least `flat` standable columns in a row
     spots = []
 
-    # Stop one row early so there's always a floor row below the player
     for r in range(GRID_H - SIZE):
         c = 0
         while c < GRID_W:
@@ -71,13 +63,11 @@ def flat_spots(tiles, flat):
                 c += 1
                 continue
 
-            # Walk to the end of this run of standable columns
             start = c
             while c < GRID_W and is_standable(tiles, c, r):
                 c += 1
             run_length = c - start
 
-            # Keep every position in a long enough run where the player fully fits
             if run_length >= flat:
                 for x in range(start, c - SIZE + 1):
                     spots.append((x, r))
@@ -85,7 +75,6 @@ def flat_spots(tiles, flat):
 
 
 def tiles_to_text(tiles, start):
-    # Grid into characters for level text, with the spawn 'S' at start
     grid_chars = []
     for row in tiles:
         char_row = [TILE_TO_CHAR[t] for t in row]
@@ -102,7 +91,6 @@ def grounded_spawn_levels(count, rng, flat=FLAT):
     while len(levels) < count:
         tiles = make_clumped_map(rng)
 
-        # Redraw maps with nowhere flat enough to spawn
         spots = flat_spots(tiles, flat)
         if not spots:
             continue
@@ -115,7 +103,6 @@ def grounded_spawn_levels(count, rng, flat=FLAT):
 
 
 def load_fixed_levels(names, flat=FLAT):
-    # Load the real levels, rejecting any whose spawn is in a wall or not on flat enough floor
 
     paths = []
     levels = []
@@ -151,7 +138,6 @@ def generate(count, level_paths=DEFAULT_LEVELS, level_share=0.4, maps=100, groun
 
     while len(pairs) < count:
 
-        # Use a real level with chance level_share (always if there are no random maps)
         if not fixed:
             use_fixed = False
         elif n_random == 0:
@@ -170,7 +156,6 @@ def generate(count, level_paths=DEFAULT_LEVELS, level_share=0.4, maps=100, groun
         else:
             state = random_air_state(level, rng)
 
-        # No valid spot found this time (rare); draw again
         if state is None:
             misses[index] += 1
             if use_fixed and misses[index] > MAX_MISSES:

@@ -1,9 +1,4 @@
 #!/usr/bin/env sh
-# Play the neural game (programs/render.py): the physics runs inside the trained model.
-#   ./play.sh        CPU-only PyTorch (any computer, including Macs)
-#   ./play.sh gpu    GPU build of PyTorch (NVIDIA + CUDA)
-# With uv (https://docs.astral.sh/uv/) the first run installs everything into training/.venv.
-# Without uv it falls back to the first Python that already has torch, pygame and numpy.
 cd "$(dirname "$0")" || exit 1
 
 if command -v uv >/dev/null 2>&1; then

@@ -9,7 +9,6 @@ from pathlib import Path
 
 from .physics import EMPTY, EXIT, GRID_H, GRID_W, PLAYER, SOLID, SPIKE, TILE
 
-# The one levels folder for the whole repo: <repo>/levels/
 LEVELS_DIR = Path(__file__).resolve().parents[2] / "levels"
 LEVEL_PATH = LEVELS_DIR / "level1.txt"
 
@@ -32,8 +31,8 @@ CHAR_TO_TILE = {".": EMPTY, "#": SOLID, "X": SPIKE, "E": EXIT, "S": EMPTY}
 
 class Level:
     def __init__(self, rows, spawn):
-        self.rows = rows  # GRID_H tuples of tile codes
-        self.spawn = spawn  # (x, y) pixels, player's top-left
+        self.rows = rows
+        self.spawn = spawn
 
     def tile(self, c, r):
         if 0 <= c < GRID_W and 0 <= r < GRID_H:

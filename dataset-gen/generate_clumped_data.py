@@ -14,8 +14,8 @@ from platformnet.run import advance
 GENERATED_DIR = Path(__file__).resolve().parent / "generated"
 MAX_X = GRID_W * TILE - PLAYER
 MAX_Y = GRID_H * TILE - PLAYER
-SIZE = PLAYER // TILE  # Player size in tiles (e.g., 2x2)
-TRIES = 1000           # Max tries to find a valid position
+SIZE = PLAYER // TILE
+TRIES = 1000
 TILE_TO_CHAR = {EMPTY: ".", SOLID: "#", EXIT: "E", SPIKE: "X"}
 
 def count_solid_neighbors(grid, r, c):
@@ -24,7 +24,6 @@ def count_solid_neighbors(grid, r, c):
     w = len(grid[0])
     count = 0
     
-    # Check all 8 surrounding directions 
     for dr in (-1, 0, 1):
         for dc in (-1, 0, 1):
             if dr == 0 and dc == 0:
@@ -32,7 +31,6 @@ def count_solid_neighbors(grid, r, c):
                 
             nr, nc = r + dr, c + dc
             
-            # If the neighbor is outside the map boundaries, treat it as a wall
             if nr < 0 or nr >= h or nc < 0 or nc >= w:
                 count += 1
             elif grid[nr][nc] == True:
@@ -71,13 +69,10 @@ def generate_cave_map(rng):
 
     h, w = GRID_H, GRID_W
     
-    #fill like 45% of the map w walls
     grid = [[rng.random() < 0.45 for _ in range(w)] for _ in range(h)]
     
-    # smoothen walls
     grid = smooth_cave(grid, 5)
     
-    # convert boolean grid to tile IDs
     map_tiles = []
     for r in range(h):
         row = []
@@ -97,10 +92,8 @@ def add_spikes(m, rng):
     
     for r in range(h - 1):
         for c in range(w):
-            # Check if current tile is empty and the tile directly below is solid (a floor)
             if m[r][c] == EMPTY and m[r + 1][c] == SOLID:
-                if rng.random() < 0.05: # 5% chance to spawn a spike
-                    # randomly makes a clump of spikes ranging from 1-5 tiles long
+                if rng.random() < 0.05:
                     length = rng.randint(1, 5)
                     for i in range(length):
                         nc = c + i
@@ -113,7 +106,6 @@ def add_exit(m, rng):
     h = len(m)
     w = len(m[0])
 
-    #randomly determines the size of exit box and fills grid 
     box_w = rng.randint(2, 5)
     box_h = rng.randint(2, 5)
     start_r = rng.randint(0, h - box_h)
@@ -145,7 +137,6 @@ def clumped_levels(count, rng):
         
         for r in range(h - SIZE + 1):
             for c in range(w - SIZE + 1):
-                # check if player hitbox clips with anything
                 all_empty = True
                 for pr in range(SIZE):
                     for pc in range(SIZE):
@@ -157,13 +148,11 @@ def clumped_levels(count, rng):
         if not clear_spots:
             continue 
 
-        #grid into characters for level text to train ai    
         grid_chars = []
         for row in tiles:
             char_row = [TILE_TO_CHAR[t] for t in row]
             grid_chars.append(char_row)
             
-        # Place the player spawn point 'S' randomly in a clear spot
         spawn_c, spawn_r = rng.choice(clear_spots)
         grid_chars[spawn_r][spawn_c] = "S"
         
@@ -196,7 +185,6 @@ def random_grounded_state(level, rng):
         floor_row = rng.randint(SIZE, GRID_H - 1)
         state = (x, float(floor_row * TILE - PLAYER), rng.uniform(-MAX_RUN, MAX_RUN), 0.0)
         
-        # Check if there is a solid tile underneath the player
         c_start = int(x // TILE)
         c_end = int((x + PLAYER) // TILE)
         has_floor = False

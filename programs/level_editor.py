@@ -18,13 +18,12 @@ from pathlib import Path
 
 import pygame
 
-# the engine (platformnet) lives in <repo>/game_py
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "game_py"))
-from platformnet.level import parse_level, resolve_level  # noqa: E402
+from platformnet.level import parse_level, resolve_level
 from platformnet.physics import GRID_H, GRID_W, TILE
 
-CELL = 7                       # on-screen pixels per tile (the game uses 5)
-BAR = 34                       # status bar height
+CELL = 7
+BAR = 34
 W, H = GRID_W * CELL, GRID_H * CELL
 TOOLS = [("#", "solid", (0, 0, 0)), ("X", "spike", (220, 40, 40)),
          ("E", "exit", (60, 200, 90)), ("S", "spawn", (255, 255, 255))]
@@ -50,7 +49,7 @@ def load_grid(path):
 
 def blank_grid():
     g = [["."] * GRID_W for _ in range(GRID_H)]
-    for c in range(GRID_W):          # a floor and a spawn so a new level is playable
+    for c in range(GRID_W):
         for r in range(GRID_H - 5, GRID_H):
             g[r][c] = "#"
     g[GRID_H - 7][3] = "S"
@@ -115,7 +114,7 @@ def draw(screen, font, grid, tool, size, show_grid, rect_drag, mouse_cell, msg, 
                 spawn = (c, r)
             elif ch in COLOR:
                 pygame.draw.rect(screen, COLOR[ch], (c * CELL, r * CELL, CELL, CELL))
-    if spawn:  # the player is 2x2 tiles
+    if spawn:
         pygame.draw.rect(screen, (255, 255, 255), (spawn[0] * CELL, spawn[1] * CELL, 2 * CELL, 2 * CELL))
         pygame.draw.rect(screen, (0, 0, 0), (spawn[0] * CELL, spawn[1] * CELL, 2 * CELL, 2 * CELL), 1)
     if show_grid:
@@ -156,8 +155,8 @@ def main():
 
     tool, size, show_grid = "#", 1, True
     undo, dirty, msg, msg_until = [], False, "", 0
-    rect_drag = None      # (start_cell, char) while shift-dragging
-    painting = None       # char being painted while dragging
+    rect_drag = None
+    painting = None
 
     def push_undo():
         undo.append([row[:] for row in grid])
@@ -169,7 +168,7 @@ def main():
 
     if load_warning:
         flash(load_warning)
-        msg_until += 7000  # keep a load problem on screen for 10 s
+        msg_until += 7000
 
     running = True
     while running:
@@ -206,7 +205,7 @@ def main():
                     show_grid = not show_grid
             elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button in (1, 3) and mouse_cell:
                 ctrl_held = pygame.key.get_mods() & pygame.KMOD_CTRL
-                ch = tool if ev.button == 1 and not ctrl_held else "."   # Ctrl+click = erase
+                ch = tool if ev.button == 1 and not ctrl_held else "."
                 push_undo()
                 dirty = True
                 if pygame.key.get_mods() & pygame.KMOD_SHIFT:

@@ -12,9 +12,9 @@ from platformnet.run import advance
 
 DEFAULT_LEVELS = ("level1", "level2", "level3", "traininglevel_181635", "traininglevel_181707",
                   "traininglevel3", "trainlevel1")
-GROUNDED = 0.5   # Share of pairs starting on a floor; the rest start in the air
-JUMP = 0.75      # Share of pairs holding jump
-MAX_MISSES = 100 # Failed placements allowed per level before erroring
+GROUNDED = 0.5
+JUMP = 0.75
+MAX_MISSES = 100
 
 
 def load_levels(level_names):
@@ -32,7 +32,6 @@ def load_levels(level_names):
 
 
 def random_action(rng, jump):
-    # Move left, stay or right; hold jump with probability `jump`
     move = rng.choice((-1, 0, 1))
     wants_jump = int(rng.random() < jump)
     return (move, wants_jump)
@@ -49,7 +48,6 @@ def generate(count, level_names=DEFAULT_LEVELS, grounded=GROUNDED, jump=JUMP, se
 
     while len(pairs) < count:
 
-        # Every level is equally likely
         index = rng.randrange(len(levels))
         level = levels[index][1]
 
@@ -58,7 +56,6 @@ def generate(count, level_names=DEFAULT_LEVELS, grounded=GROUNDED, jump=JUMP, se
         else:
             state = random_air_state(level, rng)
 
-        # No valid spot found this time (rare); draw again
         if state is None:
             misses[index] += 1
             if misses[index] > MAX_MISSES:

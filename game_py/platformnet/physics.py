@@ -31,7 +31,6 @@ Horizontal movement, per tick:
 """
 from math import ceil, floor
 
-# Bump whenever constants or rules change: data recorded before is under different physics.
 PHYSICS_VERSION = 6
 
 TICK_HZ = 60
@@ -40,19 +39,17 @@ PLAYER = 10
 GRID_W = 100
 GRID_H = 100
 
-MAX_RUN = 3.3          # top running speed, px/tick
-GROUND_ACCEL = 0.5     # max change in vx per tick on a surface with mu = 1.0
-AIR_RESISTANCE = 0.05  # fraction of vx lost per tick in the air
-AIR_ACCEL = AIR_RESISTANCE * MAX_RUN  # air push while holding; balances drag at MAX_RUN
-GRAVITY = 0.6          # added to vy every tick
-MAX_FALL = 15.0        # vy cap (collision is swept, so no tunnelling at this speed)
-JUMP_VEL = -8.4        # vy set when jumping from the ground -> apex ~55 px, always the same
-VX_EPS = 0.01          # |vx| below this snaps to 0, so the player fully stops
+MAX_RUN = 3.3
+GROUND_ACCEL = 0.5
+AIR_RESISTANCE = 0.05
+AIR_ACCEL = AIR_RESISTANCE * MAX_RUN
+GRAVITY = 0.6
+MAX_FALL = 15.0
+JUMP_VEL = -8.4
+VX_EPS = 0.01
 
-# Tile codes
 EMPTY, SOLID, EXIT, SPIKE = range(4)
 
-# Friction coefficient (grip) of each ground material. Add a material = add a tile code + an entry.
 FRICTION = {SOLID: 1.0}
 
 STATE_DIM = 4
