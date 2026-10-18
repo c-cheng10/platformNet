@@ -18,7 +18,9 @@ from pathlib import Path
 
 import pygame
 
-from platformnet.level import parse_level, resolve_level
+# the engine (platformnet) lives in <repo>/game_py
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "game_py"))
+from platformnet.level import parse_level, resolve_level  # noqa: E402
 from platformnet.physics import GRID_H, GRID_W, TILE
 
 CELL = 7                       # on-screen pixels per tile (the game uses 5)

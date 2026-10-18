@@ -5,7 +5,9 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from map_gen import make_maps  # noqa: E402
-from true_view import EMPTY, EXIT, N_TYPES, SOLID, SPIKE, true_view  # noqa: E402
+from platformnet.physics import EMPTY, EXIT, SOLID, SPIKE  # noqa: E402
+
+N_TYPES = 4
 
 
 def test_shape_dtype_and_valid_codes():
@@ -32,9 +34,3 @@ def test_thin_structures_are_common():
     thin_ledge = m[:, 1:-1, :] & ~m[:, :-2, :] & ~m[:, 2:, :]    # solid with empty above and below
     per_map = (thin_wall.flatten(1).any(1) & thin_ledge.flatten(1).any(1)).float().mean()
     assert per_map > 0.9
-
-
-def test_maps_work_with_true_view():
-    m = make_maps(4, seed=4)
-    v = true_view(m, torch.tensor([10.0, 250.0, 499.0, 77.7]), torch.tensor([5.0, 250.0, 300.0, 480.0]))
-    assert v.shape == (4, 150, 150)

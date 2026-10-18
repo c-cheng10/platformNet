@@ -1,4 +1,4 @@
-"""Pairs on render_net/map_gen.py maps only, starting on the ground and mostly jumping.
+"""Pairs on map_gen.py maps only, starting on the ground and mostly jumping.
 
     python generate_mapgen_ground_jump_data.py [-n COUNT] [--maps M] [--grounded FRAC] [--jump FRAC]
                                                [--flat TILES] [--seed SEED]
@@ -19,7 +19,6 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "render_net"))
 from map_gen import make_maps_np  # noqa: E402
 
 from gamerecorder import make_pair

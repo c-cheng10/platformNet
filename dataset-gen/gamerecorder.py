@@ -15,7 +15,10 @@ import sys
 import time
 from pathlib import Path
 
-from platformnet.level import LEVEL_PATH, resolve_level
+# platformnet (the engine) and game.py live in <repo>/game_py
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "game_py"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "programs"))  # game.py
+from platformnet.level import LEVEL_PATH, resolve_level  # noqa: E402
 
 RECORDINGS_DIR = Path(__file__).resolve().parent / "recordings"
 

@@ -5,9 +5,9 @@ import random
 from pathlib import Path
 
 LEVELS_DIR = Path(__file__).resolve().parents[1] / "levels"
-ART_DIR = Path(__file__).resolve().parents[1] / "art"
+ART_DIR = Path(__file__).resolve().parents[1] / "assets" / "art"
 BG_ART_DIR = ART_DIR / "bg"
-MODEL_PATH = Path(__file__).resolve().parent / "model_b128_e100_noise2_p30.pt"
+MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "model_b128_e100_noise2_p30.pt"
 
 # Floor snapping: the network's tiny errors push a standing player a fraction of a px into the floor,
 # which it never saw in training, so it sinks. When on, a predicted position close to resting on solid
@@ -16,8 +16,8 @@ SNAP_TO_FLOOR = False
 SNAP_DIST = 1.0    # px: how far above/into the floor still counts as standing on it
 SNAP_MIN_VY = -1.0  # px/tick: never snap while moving up faster than this (taking off from a jump)
 
-# The model and its pre/post-processing live in neuralnet/train.py
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "neuralnet"))
+# The model and its pre/post-processing live in training/train.py
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "training"))
 from train import run_model
 
 # Initialize Pygame

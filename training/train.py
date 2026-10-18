@@ -1,9 +1,9 @@
-"""Train NextStatePredictor on recordings from game_py/gamerecorder.py.
+"""Train NextStatePredictor on recordings from dataset-gen/gamerecorder.py.
 
-    python train.py                          # every recording in ../game_py/recordings
+    python train.py                          # every recording in ../dataset-gen/recordings
     python train.py some/dir run1.json ...   # specific files / directories
-    python train.py --epochs 50 --batch-size 32 --lr 3e-4 --out model.pt
-    python train.py --latest                 # newest dataset in ../game_py/generated
+    python train.py --epochs 50 --batch-size 32 --lr 3e-4 --out ../models/model.pt
+    python train.py --latest                 # newest dataset in ../dataset-gen/generated
 
 Each recording is a list of {"input": {...}, "output": {...}} pairs, one per tick.
 
@@ -38,8 +38,9 @@ from torch.utils.data import DataLoader, TensorDataset, random_split
 
 from model import CROP, HALF, LEVEL_SIZE, NextStatePredictor
 
-RECORDINGS_DIR = Path(__file__).resolve().parent.parent / "game_py" / "recordings"
-GENERATED_DIR = Path(__file__).resolve().parent.parent / "game_py" / "generated"
+RECORDINGS_DIR = Path(__file__).resolve().parent.parent / "dataset-gen" / "recordings"
+GENERATED_DIR = Path(__file__).resolve().parent.parent / "dataset-gen" / "generated"
+MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
 
 # Must match the tile codes in game_py/platformnet/physics.py (EMPTY, SOLID, EXIT, SPIKE = range(4)).
 # Spawn ("S") is empty for physics.
@@ -90,7 +91,7 @@ def find_recordings(paths):
 
 
 def latest_generated():
-    """The most recently written dataset in game_py/generated (generate_data.py / generate_clumped_data.py)"""
+    """The most recently written dataset in dataset-gen/generated (generate_data.py / generate_clumped_data.py)"""
     files = list(GENERATED_DIR.glob("*.json")) + list(GENERATED_DIR.glob("*.json.gz"))
     if not files:
         raise SystemExit(f"no datasets in {GENERATED_DIR}")
@@ -166,7 +167,7 @@ def mean_std(x):
     return x.mean(0), x.std(0).clamp(min=1e-3)
 
 
-def load_predictor(path="model.pt", device="cpu"):
+def load_predictor(path=MODELS_DIR / "model.pt", device="cpu"):
     """Returns predict(level_text, keys, prev) -> next_state (B,4) [x, y, vx, vy] in pixels.
     keys is (B,3) [left, right, jump], prev is (B,4) [x, y, vx, vy]."""
     ckpt = torch.load(path, map_location=device)
@@ -192,7 +193,7 @@ def load_predictor(path="model.pt", device="cpu"):
 _predictors = {}  # checkpoint path -> predict(), so the model is only loaded once
 
 
-def run_model(inputs, path="model.pt"):
+def run_model(inputs, path=MODELS_DIR / "model.pt"):
     """One forward pass with the trained parameters, in the recording format:
     inputs is a recording's "input" dict (shouldLeft, shouldRight, wantsJump, LEVEL, prevposx, ...),
     returns a dict of the next state (posx, posy, velx, vely)."""
@@ -205,13 +206,13 @@ def run_model(inputs, path="model.pt"):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("paths", nargs="*", default=[RECORDINGS_DIR], help="recording files or directories")
-    parser.add_argument("--latest", action="store_true", help="train on the newest dataset in game_py/generated")
+    parser.add_argument("--latest", action="store_true", help="train on the newest dataset in dataset-gen/generated")
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--hidden-size", type=int, default=256)
     parser.add_argument("--val-fraction", type=float, default=0.1)
-    parser.add_argument("--out", default="model.pt")
+    parser.add_argument("--out", default=str(MODELS_DIR / "model.pt"))
     parser.add_argument("--patience", type=int, default=10,
                         help="stop after this many epochs without val loss improving by --min-delta (0 = never stop early)")
     parser.add_argument("--min-delta", type=float, default=1e-4, help="smallest val loss drop that counts as improving")

@@ -4,7 +4,7 @@
                             [--grounded FRAC] [--seed SEED]
 
 A share of pairs (--level-share, default 40%) use a real level (--level, default levels/level2.txt).
-The rest are spread over random maps made by render_net/map_gen.py, each with one random spawn
+The rest are spread over random maps made by map_gen.py, each with one random spawn
 point S on a clear spot. Each file holds --maps levels in total (default 100), --level included.
 
 Each pair: a random frame 1 (position, velocity, keys) and frame 2 computed by the real physics,
@@ -26,7 +26,6 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "render_net"))
 from map_gen import make_maps_np  # noqa: E402
 
 from gamerecorder import make_pair

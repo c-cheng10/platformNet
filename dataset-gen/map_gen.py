@@ -1,5 +1,4 @@
-"""Procedural maps for training the render net: endless variety, so it learns to READ
-maps instead of memorising one.
+"""Procedural random maps for training data: endless variety (thin walls, 1-tile platforms, spikes, exits).
 
     make_maps(B, seed=None) -> [B, 100, 100] long tensor of tile types
     make_maps_np(B, seed=None) -> the same as an int64 numpy array (no torch needed)
@@ -7,7 +6,7 @@ maps instead of memorising one.
 Half the maps are "level-like" (floors with gaps, platforms, walls, spikes on
 surfaces, an exit), half are random rectangles. Sizes are log-uniform, so small
 things (1-tile walls, single tiles) are as common as big blocks: thin things are
-what renderers get wrong, so training must be full of them.
+what learned models get wrong, so training must be full of them.
 
 Anything the generator never makes, the network won't render well. Leaving
 something out on purpose is fine (glitch bait), but do it deliberately.

@@ -6,18 +6,20 @@
 
 Physics runs exactly one fixed tick per rendered frame at 60 Hz, never variable dt.
 Usage: python game.py [level]   e.g. level3 -> <repo>/levels/level3.txt (default level2; make levels with level_editor.py)
-Nothing is recorded. To record training data, play with gamerecorder.py instead (same controls).
+Nothing is recorded. To record training data, play with dataset-gen/gamerecorder.py instead (same controls).
 """
 import sys
 from pathlib import Path
 
 import pygame
 
-from platformnet.level import load_level
+# the engine (platformnet) lives in <repo>/game_py
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "game_py"))
+from platformnet.level import load_level  # noqa: E402
 from platformnet.physics import EXIT, GRID_H, GRID_W, PLAYER, SOLID, SPIKE, TICK_HZ, TILE
 from platformnet.run import advance, spawn_state
 
-ASSETS = Path(__file__).resolve().parent / "assets"
+ASSETS = Path(__file__).resolve().parents[1] / "assets" / "sprites"
 SCREEN = (GRID_W * TILE, GRID_H * TILE)  # 500 x 500
 COLORS = {"bg": (0xBC, 0xDF, 0xFF), SOLID: (0, 0, 0), EXIT: (60, 200, 90), "hud": (0, 0, 0)}
 
