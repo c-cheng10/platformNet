@@ -9,9 +9,8 @@ ART_DIR = Path(__file__).resolve().parents[1] / "assets" / "art"
 BG_ART_DIR = ART_DIR / "bg"
 MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "model_b128_e100_noise2_p30.pt"
 
-# Floor snapping: the network's tiny errors push a standing player a fraction of a px into the floor,
-# which it never saw in training, so it sinks. When on, a predicted position close to resting on solid
-# ground is snapped onto it exactly, like the real physics does. Press F in game to flip it live.
+# Because of small errors the model can sometimes be pushed a tiny bit into the ground, which ends
+# up making it sink. This basically forces it to stay on top. Press F to toggle.
 SNAP_TO_FLOOR = False
 SNAP_DIST = 1.0    # px: how far above/into the floor still counts as standing on it
 SNAP_MIN_VY = -1.0  # px/tick: never snap while moving up faster than this (taking off from a jump)
@@ -28,7 +27,7 @@ SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 1000
 TILE_SIZE = 10 # Should be SCREEN_WIDTH/100
 
-# The model works in game units: 5 px tiles and a 10 px (2x2 tile) player, at 60 ticks/s
+# 5px tiles, 10px player
 GAME_TILE = 5
 GAME_PLAYER = 10
 SCALE = TILE_SIZE / GAME_TILE  # game px -> screen px
@@ -50,10 +49,7 @@ import pygame
 
 def adjust_saturation(surface, saturation_factor):
     """
-    Adjusts the saturation of a Pygame surface.
-    :param surface: The original pygame.Surface
-    :param saturation_factor: Float from 0.0 (fully grayscale) to 1.0 (original color)
-    :return: A new pygame.Surface with adjusted saturation
+    Changes the saturation of a Pygame surface. Scale of 0.0-1.0.
     """
     # 1. Copy the original surface so we don't mutate the source
     result = surface.copy()
@@ -76,7 +72,7 @@ def adjust_saturation(surface, saturation_factor):
     return result
 
 def load_level(level_num):
-    """Loads level data from a file based on level number."""
+    """Loads level data from a file given the level number."""
     filepath = LEVELS_DIR / f"level{level_num}.txt"
     if not os.path.exists(filepath):
         return None, None
@@ -88,7 +84,7 @@ def load_level(level_num):
     return level_data, level_grid
 
 def load_random_player_art():
-    """Finds all png/jpg files in the art directory and selects one randomly, scaled to player size."""
+    """Finds all image files in /art and picks one randomly, also scales it to the right size."""
     if not ART_DIR.exists():
         return None
     
@@ -110,7 +106,7 @@ def load_random_player_art():
         return None
 
 def load_random_background():
-    """Finds all png/jpg files in the art/bg directory and selects one randomly, scaled to screen size."""
+    """Finds all image files in /art/bg and picks one randomly."""
     if not BG_ART_DIR.exists():
         return None
     
@@ -130,25 +126,25 @@ def load_random_background():
         return None
 
 def get_start_position(grid):
-    """Finds the 'S' starting tile coordinates."""
+    """Finds the starting tile coordinates."""
     for r_idx, row in enumerate(grid):
         if 'S' in row:
             return [float(row.index('S') * GAME_TILE), float(r_idx * GAME_TILE)]
     return [0.0, 0.0]
 
 def render_level(surface, grid, bg_img):
-    """Draws the full level grid."""
+    """Draws the level."""
     if bg_img:
         #surface.blit(adjust_saturation(bg_img, saturation_factor=0.5), (0, 0))
         surface.blit(bg_img, (0, 0))
     else:
         surface.fill(COLOR_BG)
         
-    for row_idx, row in enumerate(grid):
-        for col_idx, tile in enumerate(row):
+    for i, row in enumerate(grid):
+        for j, tile in enumerate(row):
             if tile == '.':
                 continue
-            rect = pygame.Rect(col_idx * TILE_SIZE, row_idx * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+            rect = pygame.Rect(j * TILE_SIZE, i * TILE_SIZE, TILE_SIZE, TILE_SIZE)
             if tile == '#':
                 pygame.draw.rect(surface, COLOR_GROUND, rect)
             #elif tile == 'S':
@@ -165,12 +161,12 @@ def render_player(surface, pos, player_img):
     if player_img:
         surface.blit(player_img, (x, y))
     else:
-        # Fallback to rectangle if no art was found
+        # fall back to using a rectangle as the player if the art didn't load
         player_rect = pygame.Rect(x, y, 2*TILE_SIZE, 2*TILE_SIZE)
         pygame.draw.rect(surface, COLOR_PLAYER, player_rect)
 
 def overlaps(level, pos, char):
-    """True if the player's box at pos strictly overlaps any tile of this type (same rule as the game)."""
+    """checks if the player strictly overlaps any tile."""
     rows = [line for line in level.splitlines() if line.strip() and not line.startswith(";")]
     x, y = pos
     for r in range(int(y // GAME_TILE), int(-(-(y + GAME_PLAYER) // GAME_TILE))):
@@ -179,29 +175,31 @@ def overlaps(level, pos, char):
                 return True
     return False
 
-def snap_to_floor(level, out):
-    """If the predicted player is within SNAP_DIST of resting on solid ground, put it exactly there with vy = 0."""
-    if out["vely"] < SNAP_MIN_VY:
-        return
-    rows = [line for line in level.splitlines() if line.strip() and not line.startswith(";")]
-    x, y = out["posx"], out["posy"]
-    r = round((y + GAME_PLAYER) / GAME_TILE)  # tile row nearest the player's bottom edge
-    if abs((y + GAME_PLAYER) - r * GAME_TILE) > SNAP_DIST:
-        return
-    cols = range(int(x // GAME_TILE), int(-(-(x + GAME_PLAYER) // GAME_TILE)))
-    # Anything outside the grid counts as solid, as in the game
-    if any(not (0 <= r < len(rows) and 0 <= c < len(rows[r])) or rows[r][c] == "#" for c in cols):
-        out["posy"] = float(r * GAME_TILE - GAME_PLAYER)
-        out["vely"] = 0.0
+# THIS FUNCTION IS NOT USED.
+#def snap_to_floor(level, out):
+#    """If the predicted player is within SNAP_DIST of resting on solid ground, put it exactly there with vy = 0."""
+#    if out["vely"] < SNAP_MIN_VY:
+#        return
+#    rows = [line for line in level.splitlines() if line.strip() and not line.startswith(";")]
+#    x, y = out["posx"], out["posy"]
+#    r = round((y + GAME_PLAYER) / GAME_TILE)  # tile row nearest the player's bottom edge
+#    if abs((y + GAME_PLAYER) - r * GAME_TILE) > SNAP_DIST:
+#        return
+#    cols = range(int(x // GAME_TILE), int(-(-(x + GAME_PLAYER) // GAME_TILE)))
+#    # Anything outside the grid counts as solid, as in the game
+#    if any(not (0 <= r < len(rows) and 0 <= c < len(rows[r])) or rows[r][c] == "#" for c in cols):
+#        out["posy"] = float(r * GAME_TILE - GAME_PLAYER)
+#        out["vely"] = 0.0
 
 
 def get_next_frame_raw(data):
-    """One tick through the network. data is in the recording "input" format;
-    returns posx, posy, velx, vely (predicted) plus isDead / isFinished."""
+    """
+    Gets the neural network's decisions based on inputs and return it.
+    """
     out = run_model(data, path=MODEL_PATH)
-    if SNAP_TO_FLOOR:
-        snap_to_floor(data["LEVEL"], out)
-    # The network only predicts motion; spikes and the exit are game rules checked on the predicted position
+    #if SNAP_TO_FLOOR:
+    #    snap_to_floor(data["LEVEL"], out)
+    # The NN only predicts motion, it doesn't calculate death or if the level is finished.
     pos = (out["posx"], out["posy"])
     out["isDead"] = int(overlaps(data["LEVEL"], pos, "X"))
     out["isFinished"] = int(not out["isDead"] and overlaps(data["LEVEL"], pos, "E"))
@@ -220,7 +218,7 @@ def get_next_frame(right_pressed, left_pressed, up_pressed, position, velocity, 
                        })
     new_pos = [data.get("posx", position[0]), data.get("posy", position[1])]
     new_vel = [data.get("velx", velocity[0]), data.get("vely", velocity[1])]
-    # The network can drift past the level edge; keep the player inside, like the game's solid border
+    # Keep the player on the screen.
     for i in range(2):
         clamped = min(max(new_pos[i], 0.0), LEVEL_PX - GAME_PLAYER)
         if clamped != new_pos[i]:
@@ -240,7 +238,7 @@ def main():
         print(f"Error: Could not find levels/level{current_level}.txt")
         sys.exit()
 
-    # Load random player art and background art once on startup
+    # Load random player and background images.
     player_img = load_random_player_art()
     bg_img = load_random_background()
 
@@ -254,9 +252,9 @@ def main():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_f:
-                SNAP_TO_FLOOR = not SNAP_TO_FLOOR
-                print(f"Floor snapping {'on' if SNAP_TO_FLOOR else 'off'}")
+            #if event.type == pygame.KEYDOWN and event.key == pygame.K_f:
+            #    SNAP_TO_FLOOR = not SNAP_TO_FLOOR
+            #    print(f"Floor snapping {'on' if SNAP_TO_FLOOR else 'off'}")
 
         # 1-3. Check key states
         keys = pygame.key.get_pressed()
@@ -291,7 +289,7 @@ def main():
             next_data, next_grid = load_level(current_level)
             
             if next_data:
-                # Load next level successfully
+                # Load next level
                 LEVEL_DATA = next_data
                 level_grid = next_grid
                 start_pos = get_start_position(level_grid)
@@ -311,7 +309,7 @@ def main():
         render_player(screen, player_pos, player_img)
 
         pygame.display.flip()
-        clock.tick(60)  # the model was trained on 60 ticks/s physics
+        clock.tick(60)  # the model was trained on 60 fps physics
 
 if __name__ == "__main__":
     main()
