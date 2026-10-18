@@ -106,7 +106,7 @@ def load_random_player_art():
         return None
 
 def load_random_background():
-    """Finds all image files in /art/bg and picks one randomly."""
+    """Finds all image files in assets/art/bg and picks one randomly."""
     if not BG_ART_DIR.exists():
         return None
     

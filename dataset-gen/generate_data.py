@@ -3,7 +3,7 @@
     python generate_data.py [-n COUNT] [--level FILE] [--level-share FRAC] [--maps M]
                             [--grounded FRAC] [--seed SEED]
 
-A share of pairs (--level-share, default 40%) use a real level (--level, default levels/level2.txt).
+A share of pairs (--level-share, default 40%) use a real level (--level, default levels/level1.txt).
 The rest are spread over random maps made by map_gen.py, each with one random spawn
 point S on a clear spot. Each file holds --maps levels in total (default 100), --level included.
 
@@ -122,7 +122,7 @@ def generate(count, level_path=DEFAULT_LEVEL_PATH, level_share=0.4, maps=100, gr
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("-n", "--count", type=int, default=250000, help="number of pairs (default 5000)")
-    parser.add_argument("--level", default=DEFAULT_LEVEL_PATH, help="real level mixed in (default levels/level2.txt)")
+    parser.add_argument("--level", default=DEFAULT_LEVEL_PATH, help="real level mixed in (default levels/level1.txt)")
     parser.add_argument("--level-share", type=float, default=0.4,
                         help="fraction of pairs on --level; the rest get random maps (default 0.4; 1 = all, 0 = none)")
     parser.add_argument("--maps", type=int, default=100, help="levels per file, --level included (default 100)")

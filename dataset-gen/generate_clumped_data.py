@@ -182,7 +182,7 @@ def generate(count, level_path=None, level_share=0.4, maps=100, grounded=0.5, se
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("-n", "--count", type=int, default=250000, help="number of pairs (default 250000)")
-    parser.add_argument("--level", default=None, help="real level mixed in (default levels/level2.txt)")
+    parser.add_argument("--level", default=None, help="real level mixed in (default levels/level1.txt)")
     parser.add_argument("--level-share", type=float, default=0.4,
                         help="fraction of pairs on --level; the rest get clumped maps (default 0.4; 1 = all, 0 = none)")
     parser.add_argument("--maps", type=int, default=100, help="levels per file, --level included (default 100)")

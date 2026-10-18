@@ -69,5 +69,5 @@ def parse_level(text):
 
 
 def load_level(path=None):
-    """Load a level by name ("level2") or path; default levels/level2.txt."""
+    """Load a level by name ("level2") or path; default levels/level1.txt."""
     return parse_level(resolve_level(path).read_text())
