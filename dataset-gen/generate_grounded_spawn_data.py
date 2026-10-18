@@ -78,10 +78,9 @@ def flat_spots(tiles, flat):
 def grounded_spawn_levels(count, rng, flat=FLAT):
     """count clumped maps, each with one spawn S standing on at least `flat` tiles of flat floor
     (maps with none are redrawn). Returns [(level text, Level), ...]."""
-    np_rng = np.random.default_rng(rng.randrange(2**32))
     levels = []
     while len(levels) < count:
-        tiles = make_clumped_map(np_rng)
+        tiles = np.array(make_clumped_map(rng))
         spots = flat_spots(tiles, flat)
         if not spots:
             continue
