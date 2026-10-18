@@ -1,9 +1,11 @@
 import pygame
 import sys
 import os
+import random
 from pathlib import Path
 
 LEVELS_DIR = Path(__file__).resolve().parents[1] / "levels"
+ART_DIR = Path(__file__).resolve().parents[1] / "art"
 MODEL_PATH = Path(__file__).resolve().parent / "model_v2.pt"
 
 # The model and its pre/post-processing live in neuralnet/train.py
@@ -30,10 +32,10 @@ clock = pygame.time.Clock()
 ### COLORS ###
 COLOR_BG = (20, 20, 30)         # Empty space (.)
 COLOR_GROUND = (70, 130, 180)   # Ground blocks (#)
-COLOR_START = (46, 204, 113)    # Start position (S)
+#COLOR_START = (46, 204, 113)    # Start position (S)
 COLOR_EXIT = (241, 196, 15)     # Exit (E)
 COLOR_SPIKE = (231, 76, 60)     # Spike (X)
-COLOR_PLAYER = (255, 255, 255)  # Player visual
+COLOR_PLAYER = (255, 255, 255)  # Fallback player visual
 
 def load_level(level_num):
     """Loads level data from a file based on level number."""
@@ -46,6 +48,25 @@ def load_level(level_num):
         
     level_grid = [list(row) for row in level_data.strip().splitlines()]
     return level_data, level_grid
+
+def load_random_player_art():
+    """Finds all png/jpg files in the art directory and selects one randomly, scaled to player size."""
+    if not ART_DIR.exists():
+        return None
+    
+    art_files = list(ART_DIR.glob("*.png")) + list(ART_DIR.glob("*.jpg")) + list(ART_DIR.glob("*.jpeg"))
+    if not art_files:
+        return None
+    
+    chosen_file = random.choice(art_files)
+    try:
+        img = pygame.image.load(str(chosen_file)).convert_alpha()
+        # Scale to player dimensions (2x2 tiles)
+        player_size = 2 * TILE_SIZE
+        return pygame.transform.smoothscale(img, (player_size, player_size))
+    except Exception as e:
+        print(f"Error loading player art {chosen_file}: {e}")
+        return None
 
 def get_start_position(grid):
     """Finds the 'S' starting tile coordinates."""
@@ -64,17 +85,23 @@ def render_level(surface, grid):
             rect = pygame.Rect(col_idx * TILE_SIZE, row_idx * TILE_SIZE, TILE_SIZE, TILE_SIZE)
             if tile == '#':
                 pygame.draw.rect(surface, COLOR_GROUND, rect)
-            elif tile == 'S':
-                pygame.draw.rect(surface, COLOR_START, rect)
+            #elif tile == 'S':
+            #    pygame.draw.rect(surface, COLOR_START, rect)
             elif tile == 'E':
                 pygame.draw.rect(surface, COLOR_EXIT, rect)
             elif tile == 'X':
                 pygame.draw.rect(surface, COLOR_SPIKE, rect)
 
-def render_player(surface, pos):
+def render_player(surface, pos, player_img):
     """Renders the player on screen. pos is in game px."""
-    player_rect = pygame.Rect(int(pos[0] * SCALE), int(pos[1] * SCALE), 2*TILE_SIZE, 2*TILE_SIZE)
-    pygame.draw.rect(surface, COLOR_PLAYER, player_rect)
+    x = int(pos[0] * SCALE)
+    y = int(pos[1] * SCALE)
+    if player_img:
+        surface.blit(player_img, (x, y))
+    else:
+        # Fallback to rectangle if no art was found
+        player_rect = pygame.Rect(x, y, 2*TILE_SIZE, 2*TILE_SIZE)
+        pygame.draw.rect(surface, COLOR_PLAYER, player_rect)
 
 def overlaps(level, pos, char):
     """True if the player's box at pos strictly overlaps any tile of this type (same rule as the game)."""
@@ -98,15 +125,15 @@ def get_next_frame_raw(data):
 
 def get_next_frame(right_pressed, left_pressed, up_pressed, position, velocity, level):
     data = get_next_frame_raw({
-                           "shouldRight": int(right_pressed),
-                           "shouldLeft": int(left_pressed),
-                           "wantsJump": int(up_pressed),
-                           "LEVEL": level,
-                           "prevposx": position[0],
-                           "prevposy": position[1],
-                           "prevvelx": velocity[0],
-                           "prevvely": velocity[1],
-                       })
+                            "shouldRight": int(right_pressed),
+                            "shouldLeft": int(left_pressed),
+                            "wantsJump": int(up_pressed),
+                            "LEVEL": level,
+                            "prevposx": position[0],
+                            "prevposy": position[1],
+                            "prevvelx": velocity[0],
+                            "prevvely": velocity[1],
+                        })
     new_pos = (data.get("posx", position[0]), data.get("posy", position[1]))
     new_vel = (data.get("velx", velocity[0]), data.get("vely", velocity[1]))
     is_dead = bool(data.get("isDead", False))
@@ -122,6 +149,9 @@ def main():
     if not LEVEL_DATA:
         print(f"Error: Could not find levels/level{current_level}.txt")
         sys.exit()
+
+    # Load random player art once on startup
+    player_img = load_random_player_art()
 
     start_pos = get_start_position(level_grid)
     player_pos = list(start_pos)
@@ -152,11 +182,13 @@ def main():
 
         # Handle player death / level reset
         if is_dead:
+            player_img = load_random_player_art()
             player_pos = list(start_pos)
             player_vel = [0.0, 0.0]
 
         # Handle level completion / loading the next level
         if is_finished:
+            player_img = load_random_player_art()
             print(f"Level {current_level} Complete!")
             current_level += 1
             next_data, next_grid = load_level(current_level)
@@ -179,7 +211,7 @@ def main():
 
         # Rendering
         render_level(screen, level_grid)
-        render_player(screen, player_pos)
+        render_player(screen, player_pos, player_img)
 
         pygame.display.flip()
         clock.tick(60)  # the model was trained on 60 ticks/s physics
