@@ -19,6 +19,7 @@ really went. When the level is done, the window loops a clean replay of just the
 """
 import argparse
 import heapq
+from collections import deque
 import os
 import sys
 import time
@@ -42,6 +43,7 @@ PLAYER = 10         # game px
 LEVEL_PX = 100 * TILE
 SOLID, EXIT, SPIKE = 1, 2, 3  # train.CHAR_TO_TILE codes
 MAX_RUN = 3.3       # px/tick, only used to rank which imagined futures look closest to the exit
+UNREACHABLE = 1e4   # route distance (tiles) for places the exit can't be walked to from
 
 ACTIONS = [(d, j) for j in (0, 1) for d in (1, 0, -1)]  # (input_dir, jump)
 HOLD = 4            # ticks each planned action is held
@@ -65,7 +67,7 @@ class WorldModel:
         self.stats = ckpt["stats"]
         self.grid = parse_level(text).long()
         self.padded = pad_level(self.grid.to(torch.uint8))
-        self.exits = (self.grid == EXIT).nonzero().float() * TILE  # (n, 2) [row, col] px of each exit tile's corner
+        self.dist = self.route_distance()
 
     @torch.no_grad()
     def step(self, state, keys):
@@ -96,13 +98,44 @@ class WorldModel:
                 hit |= ok & (self.grid[r.clamp(0, 99), c.clamp(0, 99)] == code)
         return hit
 
+    def route_distance(self):
+        """(99, 99) tiles from each player position (its top-left tile) to the exit, walking through open space
+        around walls and spikes, ignoring gravity. Straight-line distance would make the planner bang into
+        any wall between the player and the exit instead of going around (e.g. up and over, in level4)."""
+        n = 100 - PLAYER // TILE + 1
+        blocked = (self.grid == SOLID) | (self.grid == SPIKE)
+        exit_ = self.grid == EXIT
+        fits = torch.zeros(n, n, dtype=torch.bool)
+        at_exit = torch.zeros(n, n, dtype=torch.bool)
+        for dr in range(PLAYER // TILE):
+            for dc in range(PLAYER // TILE):
+                fits |= blocked[dr:dr + n, dc:dc + n]
+                at_exit |= exit_[dr:dr + n, dc:dc + n]
+        fits = ~fits
+        dist = torch.full((n, n), UNREACHABLE)
+        queue = deque()
+        for r, c in (at_exit & fits).nonzero().tolist():
+            dist[r, c] = 0
+            queue.append((r, c))
+        while queue:
+            r, c = queue.popleft()
+            for nr, nc in ((r + 1, c), (r - 1, c), (r, c + 1), (r, c - 1)):
+                if 0 <= nr < n and 0 <= nc < n and fits[nr, nc] and dist[nr, nc] == UNREACHABLE:
+                    dist[nr, nc] = dist[r, c] + 1
+                    queue.append((nr, nc))
+        return dist
+
     def heuristic(self, state):
-        """Optimistic ticks to touch the nearest exit tile."""
-        x, y = state[:, :1], state[:, 1:2]
-        er, ec = self.exits[:, 0], self.exits[:, 1]
-        dx = torch.clamp(torch.maximum(ec - (x + PLAYER), x - (ec + TILE)), min=0)
-        dy = torch.clamp(torch.maximum(er - (y + PLAYER), y - (er + TILE)), min=0)
-        return torch.maximum(dx / MAX_RUN, dy / 8.0).min(1).values
+        """Rough ticks to the exit along the open route, at full run speed. Looks at the tiles around the
+        player's top-left, so a state the model put a hair inside a wall still gets a sensible score."""
+        n = self.dist.shape[0]
+        r = torch.floor(state[:, 1] / TILE).long()
+        c = torch.floor(state[:, 0] / TILE).long()
+        best = torch.full((len(state),), UNREACHABLE)
+        for dr in (0, 1):
+            for dc in (0, 1):
+                best = torch.minimum(best, self.dist[(r + dr).clamp(0, n - 1), (c + dc).clamp(0, n - 1)])
+        return best * TILE / MAX_RUN
 
 
 def plan(wm, start):
