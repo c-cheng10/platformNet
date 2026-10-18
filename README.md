@@ -17,6 +17,8 @@ play.bat            :: NVIDIA GPU
 play.bat cpu        :: any computer
 ```
 On Mac/Linux use `./play.sh` (CPU) or `./play.sh gpu`.
+Watch the model play a level by itself (it plans with the network, the real engine executes, then it replans):
+`./demo.sh level2` opens a window; add `--gif demo.gif` to also save the run as a GIF.
 The first run installs PyTorch and the other dependencies into `training/.venv`, which takes a few minutes.
 
 The real-engine tools only need pygame (`pip install pygame numpy`):
