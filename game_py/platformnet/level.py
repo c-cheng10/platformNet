@@ -17,7 +17,7 @@ LEVEL_PATH = LEVELS_DIR / "level1.txt"
 def resolve_level(name=None):
     """Turn what a user typed into a level file path.
 
-    None -> levels/level2.txt;  "level3" or "level3.txt" -> levels/level3.txt;
+    None -> levels/level1.txt;  "level3" or "level3.txt" -> levels/level3.txt;
     anything that is already an existing path (or contains a folder) is used as-is.
     """
     if name is None:
