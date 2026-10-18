@@ -21,6 +21,10 @@ Watch the model play a level by itself (it plans with the network, the real engi
 `./demo.sh level2` opens a window; add `--gif demo.gif` to also save the run as a GIF.
 The first run installs PyTorch and the other dependencies into `training/.venv`, which takes a few minutes.
 
+**No uv?** Both scripts fall back to running `programs/render.py` with the first Python they find
+that already has `torch`, `pygame` and `numpy` (Windows tries `py -3.12`, `py -3`, `python`, `python3`).
+If there isn't one, they tell you what to install (`pip install torch pygame numpy`).
+
 The real-engine tools only need pygame (`pip install pygame numpy`):
 
 ```bat
