@@ -1,10 +1,13 @@
 import pygame
 import sys
 import os
+import random
 from pathlib import Path
 
 LEVELS_DIR = Path(__file__).resolve().parents[1] / "levels"
-MODEL_PATH = Path(__file__).resolve().parent / "model_v2.pt"
+ART_DIR = Path(__file__).resolve().parents[1] / "art"
+BG_ART_DIR = ART_DIR / "bg"
+MODEL_PATH = Path(__file__).resolve().parent / "noisy_model.pt"
 
 # Floor snapping: the network's tiny errors push a standing player a fraction of a px into the floor,
 # which it never saw in training, so it sinks. When on, a predicted position close to resting on solid
@@ -36,12 +39,41 @@ pygame.display.set_caption("Platformer Renderer")
 clock = pygame.time.Clock()
 
 ### COLORS ###
-COLOR_BG = (20, 20, 30)         # Empty space (.)
-COLOR_GROUND = (70, 130, 180)   # Ground blocks (#)
-COLOR_START = (46, 204, 113)    # Start position (S)
+COLOR_BG = (0xf2, 0xf2, 0xf2)   # Empty space (.) fallback
+COLOR_GROUND = (0, 0, 0)        # Ground blocks (#)
+#COLOR_START = (46, 204, 113)   # Start position (S)
 COLOR_EXIT = (241, 196, 15)     # Exit (E)
 COLOR_SPIKE = (231, 76, 60)     # Spike (X)
-COLOR_PLAYER = (255, 255, 255)  # Player visual
+COLOR_PLAYER = (255, 255, 255)  # Fallback player visual
+
+import pygame
+
+def adjust_saturation(surface, saturation_factor):
+    """
+    Adjusts the saturation of a Pygame surface.
+    :param surface: The original pygame.Surface
+    :param saturation_factor: Float from 0.0 (fully grayscale) to 1.0 (original color)
+    :return: A new pygame.Surface with adjusted saturation
+    """
+    # 1. Copy the original surface so we don't mutate the source
+    result = surface.copy()
+    
+    # If factor is 1.0, no changes needed
+    if saturation_factor >= 1.0:
+        return result
+        
+    # 2. Generate the built-in grayscale version of the surface
+    gray_surface = pygame.transform.grayscale(surface)
+    
+    # 3. Calculate alpha for the grayscale overlay 
+    # (0.0 saturation = 255 alpha overlay, 1.0 saturation = 0 alpha overlay)
+    alpha_value = int((1.0 - saturation_factor) * 255)
+    gray_surface.set_alpha(alpha_value)
+    
+    # 4. Blit the semi-transparent grayscale image over the copy to wash out colors
+    result.blit(gray_surface, (0, 0))
+    
+    return result
 
 def load_level(level_num):
     """Loads level data from a file based on level number."""
@@ -55,6 +87,48 @@ def load_level(level_num):
     level_grid = [list(row) for row in level_data.strip().splitlines()]
     return level_data, level_grid
 
+def load_random_player_art():
+    """Finds all png/jpg files in the art directory and selects one randomly, scaled to player size."""
+    if not ART_DIR.exists():
+        return None
+    
+    art_files = (
+        list(ART_DIR.glob("*.png")) + list(ART_DIR.glob("*.jpg")) + list(ART_DIR.glob("*.jpeg")) +
+        list(ART_DIR.glob("*.PNG")) + list(ART_DIR.glob("*.JPG")) + list(ART_DIR.glob("*.JPEG"))
+    )
+    if not art_files:
+        return None
+    
+    chosen_file = random.choice(art_files)
+    try:
+        img = pygame.image.load(str(chosen_file)).convert_alpha()
+        # Scale to player dimensions (2x2 tiles)
+        player_size = 2 * TILE_SIZE
+        return pygame.transform.smoothscale(img, (player_size, player_size))
+    except Exception as e:
+        print(f"Error loading player art {chosen_file}: {e}")
+        return None
+
+def load_random_background():
+    """Finds all png/jpg files in the art/bg directory and selects one randomly, scaled to screen size."""
+    if not BG_ART_DIR.exists():
+        return None
+    
+    bg_files = (
+        list(BG_ART_DIR.glob("*.png")) + list(BG_ART_DIR.glob("*.jpg")) + list(BG_ART_DIR.glob("*.jpeg")) +
+        list(BG_ART_DIR.glob("*.PNG")) + list(BG_ART_DIR.glob("*.JPG")) + list(BG_ART_DIR.glob("*.JPEG"))
+    )
+    if not bg_files:
+        return None
+    
+    chosen_file = random.choice(bg_files)
+    try:
+        img = pygame.image.load(str(chosen_file)).convert()
+        return adjust_saturation(pygame.transform.smoothscale(img, (SCREEN_WIDTH, SCREEN_HEIGHT)), 0.5)
+    except Exception as e:
+        print(f"Error loading background art {chosen_file}: {e}")
+        return None
+
 def get_start_position(grid):
     """Finds the 'S' starting tile coordinates."""
     for r_idx, row in enumerate(grid):
@@ -62,9 +136,14 @@ def get_start_position(grid):
             return [float(row.index('S') * GAME_TILE), float(r_idx * GAME_TILE)]
     return [0.0, 0.0]
 
-def render_level(surface, grid):
+def render_level(surface, grid, bg_img):
     """Draws the full level grid."""
-    surface.fill(COLOR_BG)
+    if bg_img:
+        #surface.blit(adjust_saturation(bg_img, saturation_factor=0.5), (0, 0))
+        surface.blit(bg_img, (0, 0))
+    else:
+        surface.fill(COLOR_BG)
+        
     for row_idx, row in enumerate(grid):
         for col_idx, tile in enumerate(row):
             if tile == '.':
@@ -72,17 +151,23 @@ def render_level(surface, grid):
             rect = pygame.Rect(col_idx * TILE_SIZE, row_idx * TILE_SIZE, TILE_SIZE, TILE_SIZE)
             if tile == '#':
                 pygame.draw.rect(surface, COLOR_GROUND, rect)
-            elif tile == 'S':
-                pygame.draw.rect(surface, COLOR_START, rect)
+            #elif tile == 'S':
+            #    pygame.draw.rect(surface, COLOR_START, rect)
             elif tile == 'E':
                 pygame.draw.rect(surface, COLOR_EXIT, rect)
             elif tile == 'X':
                 pygame.draw.rect(surface, COLOR_SPIKE, rect)
 
-def render_player(surface, pos):
+def render_player(surface, pos, player_img):
     """Renders the player on screen. pos is in game px."""
-    player_rect = pygame.Rect(int(pos[0] * SCALE), int(pos[1] * SCALE), 2*TILE_SIZE, 2*TILE_SIZE)
-    pygame.draw.rect(surface, COLOR_PLAYER, player_rect)
+    x = int(pos[0] * SCALE)
+    y = int(pos[1] * SCALE)
+    if player_img:
+        surface.blit(player_img, (x, y))
+    else:
+        # Fallback to rectangle if no art was found
+        player_rect = pygame.Rect(x, y, 2*TILE_SIZE, 2*TILE_SIZE)
+        pygame.draw.rect(surface, COLOR_PLAYER, player_rect)
 
 def overlaps(level, pos, char):
     """True if the player's box at pos strictly overlaps any tile of this type (same rule as the game)."""
@@ -148,12 +233,16 @@ def get_next_frame(right_pressed, left_pressed, up_pressed, position, velocity, 
 ### MAIN LOOP ###
 def main():
     global SNAP_TO_FLOOR
-    current_level = 2
+    current_level = 1
     LEVEL_DATA, level_grid = load_level(current_level)
     
     if not LEVEL_DATA:
         print(f"Error: Could not find levels/level{current_level}.txt")
         sys.exit()
+
+    # Load random player art and background art once on startup
+    player_img = load_random_player_art()
+    bg_img = load_random_background()
 
     start_pos = get_start_position(level_grid)
     player_pos = list(start_pos)
@@ -187,11 +276,15 @@ def main():
 
         # Handle player death / level reset
         if is_dead:
+            player_img = load_random_player_art()
+            bg_img = load_random_background()
             player_pos = list(start_pos)
             player_vel = [0.0, 0.0]
 
         # Handle level completion / loading the next level
         if is_finished:
+            player_img = load_random_player_art()
+            bg_img = load_random_background()
             print(f"Level {current_level} Complete!")
             current_level += 1
             next_data, next_grid = load_level(current_level)
@@ -213,8 +306,8 @@ def main():
                 player_vel = [0.0, 0.0]
 
         # Rendering
-        render_level(screen, level_grid)
-        render_player(screen, player_pos)
+        render_level(screen, level_grid, bg_img)
+        render_player(screen, player_pos, player_img)
 
         pygame.display.flip()
         clock.tick(60)  # the model was trained on 60 ticks/s physics
