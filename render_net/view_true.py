@@ -7,7 +7,7 @@
 
 Left: the 150x150 camera view from true_view(), scaled 3x.
 Right: the whole map with the camera's area outlined.
-Usage: python view_true.py [level]   (e.g. level2; default <repo>/levels/level1.txt)
+Usage: python view_true.py [level]   (e.g. level3; default <repo>/levels/level2.txt)
 """
 import sys
 

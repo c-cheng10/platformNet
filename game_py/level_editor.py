@@ -8,7 +8,7 @@
     Ctrl+Z          undo        Ctrl+S   save        Ctrl+N   clear
     Esc             quit (unsaved changes are lost)
 
-Usage: python level_editor.py [level]   e.g. level4 -> <repo>/levels/level4.txt (default level1;
+Usage: python level_editor.py [level]   e.g. level4 -> <repo>/levels/level4.txt (default level2;
 created if missing). A full path also works.
 The grid is 100 x 100 tiles, the same as the game. The white box at the spawn
 shows the player's 2x2-tile size.

@@ -17,7 +17,7 @@ LEVEL_PATH = LEVELS_DIR / "level1.txt"
 def resolve_level(name=None):
     """Turn what a user typed into a level file path.
 
-    None -> levels/level1.txt;  "level2" or "level2.txt" -> levels/level2.txt;
+    None -> levels/level2.txt;  "level3" or "level3.txt" -> levels/level3.txt;
     anything that is already an existing path (or contains a folder) is used as-is.
     """
     if name is None:
@@ -69,5 +69,5 @@ def parse_level(text):
 
 
 def load_level(path=None):
-    """Load a level by name ("level2") or path; default levels/level1.txt."""
+    """Load a level by name ("level2") or path; default levels/level2.txt."""
     return parse_level(resolve_level(path).read_text())
