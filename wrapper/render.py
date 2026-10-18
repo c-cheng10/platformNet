@@ -6,6 +6,13 @@ from pathlib import Path
 LEVELS_DIR = Path(__file__).resolve().parents[1] / "levels"
 MODEL_PATH = Path(__file__).resolve().parent / "model_v2.pt"
 
+# Floor snapping: the network's tiny errors push a standing player a fraction of a px into the floor,
+# which it never saw in training, so it sinks. When on, a predicted position close to resting on solid
+# ground is snapped onto it exactly, like the real physics does. Press F in game to flip it live.
+SNAP_TO_FLOOR = False
+SNAP_DIST = 1.0    # px: how far above/into the floor still counts as standing on it
+SNAP_MIN_VY = -1.0  # px/tick: never snap while moving up faster than this (taking off from a jump)
+
 # The model and its pre/post-processing live in neuralnet/train.py
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "neuralnet"))
 from train import run_model
@@ -22,6 +29,7 @@ TILE_SIZE = 10 # Should be SCREEN_WIDTH/100
 GAME_TILE = 5
 GAME_PLAYER = 10
 SCALE = TILE_SIZE / GAME_TILE  # game px -> screen px
+LEVEL_PX = 100 * GAME_TILE  # levels are 100x100 tiles
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Platformer Renderer")
@@ -86,10 +94,28 @@ def overlaps(level, pos, char):
                 return True
     return False
 
+def snap_to_floor(level, out):
+    """If the predicted player is within SNAP_DIST of resting on solid ground, put it exactly there with vy = 0."""
+    if out["vely"] < SNAP_MIN_VY:
+        return
+    rows = [line for line in level.splitlines() if line.strip() and not line.startswith(";")]
+    x, y = out["posx"], out["posy"]
+    r = round((y + GAME_PLAYER) / GAME_TILE)  # tile row nearest the player's bottom edge
+    if abs((y + GAME_PLAYER) - r * GAME_TILE) > SNAP_DIST:
+        return
+    cols = range(int(x // GAME_TILE), int(-(-(x + GAME_PLAYER) // GAME_TILE)))
+    # Anything outside the grid counts as solid, as in the game
+    if any(not (0 <= r < len(rows) and 0 <= c < len(rows[r])) or rows[r][c] == "#" for c in cols):
+        out["posy"] = float(r * GAME_TILE - GAME_PLAYER)
+        out["vely"] = 0.0
+
+
 def get_next_frame_raw(data):
     """One tick through the network. data is in the recording "input" format;
     returns posx, posy, velx, vely (predicted) plus isDead / isFinished."""
     out = run_model(data, path=MODEL_PATH)
+    if SNAP_TO_FLOOR:
+        snap_to_floor(data["LEVEL"], out)
     # The network only predicts motion; spikes and the exit are game rules checked on the predicted position
     pos = (out["posx"], out["posy"])
     out["isDead"] = int(overlaps(data["LEVEL"], pos, "X"))
@@ -107,8 +133,13 @@ def get_next_frame(right_pressed, left_pressed, up_pressed, position, velocity, 
                            "prevvelx": velocity[0],
                            "prevvely": velocity[1],
                        })
-    new_pos = (data.get("posx", position[0]), data.get("posy", position[1]))
-    new_vel = (data.get("velx", velocity[0]), data.get("vely", velocity[1]))
+    new_pos = [data.get("posx", position[0]), data.get("posy", position[1])]
+    new_vel = [data.get("velx", velocity[0]), data.get("vely", velocity[1])]
+    # The network can drift past the level edge; keep the player inside, like the game's solid border
+    for i in range(2):
+        clamped = min(max(new_pos[i], 0.0), LEVEL_PX - GAME_PLAYER)
+        if clamped != new_pos[i]:
+            new_pos[i], new_vel[i] = clamped, 0.0
     is_dead = bool(data.get("isDead", False))
     is_finished = bool(data.get("isFinished", False))
     
@@ -116,6 +147,7 @@ def get_next_frame(right_pressed, left_pressed, up_pressed, position, velocity, 
 
 ### MAIN LOOP ###
 def main():
+    global SNAP_TO_FLOOR
     current_level = 2
     LEVEL_DATA, level_grid = load_level(current_level)
     
@@ -133,6 +165,9 @@ def main():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_f:
+                SNAP_TO_FLOOR = not SNAP_TO_FLOOR
+                print(f"Floor snapping {'on' if SNAP_TO_FLOOR else 'off'}")
 
         # 1-3. Check key states
         keys = pygame.key.get_pressed()

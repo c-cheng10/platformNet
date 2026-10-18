@@ -17,6 +17,12 @@ top-left corner at row/col 15), plus the keys, where the player sits inside that
 and its velocity. Absolute position isn't an input: the physics is the same everywhere in the level.
 Cropping happens once at load time.
 
+Input noise (--noise-frac, --pos-noise, --vel-noise): the real physics only ever produces exact states
+(standing means y exactly on a tile edge and vy == 0), so a network trained on them alone never learns
+what to do when its own small errors put it slightly off, e.g. 0.01 px into the floor, and it sinks.
+So a fraction of training frames get their previous state jittered while keeping the clean target,
+which teaches it to pull back onto the real trajectory. Validation is always clean.
+
 Death frames are skipped: a death teleports the player back to spawn (hundreds of px), which isn't
 physics the network should learn and would blow up the std and swamp the loss.
 """
@@ -41,6 +47,7 @@ CHAR_TO_TILE = {".": 0, "#": 1, "E": 2, "X": 3, "S": 0}
 SOLID = 1
 TILE = 5  # px per tile
 PAD = CROP  # solid border added around the level, so crops near (or past) the edge stay in bounds
+NOISE_MARGIN = 1  # extra tiles stored around each training crop, so input noise can move the player a tile
 
 KEYS = ("shouldLeft", "shouldRight", "wantsJump")
 PREV_STATE = ("prevposx", "prevposy", "prevvelx", "prevvely")
@@ -60,11 +67,12 @@ def pad_level(level):
     return padded
 
 
-def frame_inputs(padded, keys, prev):
-    """One frame -> crop (32,32) and extra [left, right, jump, frac_x, frac_y, vx, vy] (unnormalized)"""
+def frame_inputs(padded, keys, prev, margin=0):
+    """One frame -> crop (32,32) and extra [left, right, jump, frac_x, frac_y, vx, vy] (unnormalized).
+    margin adds that many extra tiles on every side of the crop (see shift_crops)."""
     x, y, vx, vy = prev
-    col, row = int(x // TILE) + PAD - HALF, int(y // TILE) + PAD - HALF
-    crop = padded[row:row + CROP, col:col + CROP]
+    col, row = int(x // TILE) + PAD - HALF - margin, int(y // TILE) + PAD - HALF - margin
+    crop = padded[row:row + CROP + 2 * margin, col:col + CROP + 2 * margin]
     return crop, list(keys) + [(x % TILE) / TILE, (y % TILE) / TILE, vx, vy]
 
 
@@ -105,8 +113,8 @@ def read_pairs(path):
             yield pair["input"]["LEVEL"], pair
 
 
-def load_recordings(files):
-    """-> crops (N,32,32) uint8, extra (N,7), prev (N,4), next (N,4), number of distinct levels.
+def load_recordings(files, margin=0):
+    """-> crops (N,32+2*margin,32+2*margin) uint8, extra (N,7), prev (N,4), next (N,4), number of distinct levels.
     Death frames are skipped."""
     level_cache = {}  # many frames share a level; parse and pad each one once
     crops, extra, prev, nxt = [], [], [], []
@@ -117,8 +125,10 @@ def load_recordings(files):
                 continue
             if level_text not in level_cache:
                 level_cache[level_text] = pad_level(parse_level(level_text))
-            p = [i[k] for k in PREV_STATE]
-            crop, e = frame_inputs(level_cache[level_text], [i[k] for k in KEYS], p)
+            # Rounded to float32 first, so the crop's tile agrees with the stored prev tensor
+            # (74.99999999999997 is tile 14 as a double but 75.0, tile 15, as a float32)
+            p = torch.tensor([i[k] for k in PREV_STATE], dtype=torch.float32).tolist()
+            crop, e = frame_inputs(level_cache[level_text], [i[k] for k in KEYS], p, margin)
             crops.append(crop)
             extra.append(e)
             prev.append(p)
@@ -130,6 +140,26 @@ def load_recordings(files):
 def normalize_extra(extra, s):
     # keys and frac are already 0-1; only the velocity needs standardizing
     return torch.cat([extra[:, :5], (extra[:, 5:] - s["vel_mean"]) / s["vel_std"]], dim=1)
+
+
+def add_noise(prev, frac, pos_std, vel_std):
+    """Jitter the previous state of a random `frac` of the rows (gaussian, px and px/tick), kept within
+    NOISE_MARGIN tiles. The target stays the clean next state, so the network learns to steer slightly-off
+    states (its own errors when it runs closed-loop) back to the real trajectory instead of compounding them."""
+    std = torch.tensor([pos_std, pos_std, vel_std, vel_std], device=prev.device)
+    noise = torch.randn_like(prev) * std * (torch.rand(len(prev), 1, device=prev.device) < frac)
+    noise[:, :2] = noise[:, :2].clamp(-NOISE_MARGIN * TILE + 0.01, NOISE_MARGIN * TILE - 0.01)
+    return prev + noise
+
+
+def shift_crops(crops, prev, noisy):
+    """crops are cut around the clean position with NOISE_MARGIN extra tiles per side; returns the
+    (B,32,32) window around the noisy position, i.e. what frame_inputs would have cut for it."""
+    tile = lambda p: torch.floor(p[:, :2] / TILE).long()
+    shift = (tile(noisy) - tile(prev)).clamp(-NOISE_MARGIN, NOISE_MARGIN) + NOISE_MARGIN  # (B,2) [col, row]
+    ar = torch.arange(CROP, device=crops.device)
+    cols, rows = shift[:, :1] + ar, shift[:, 1:] + ar
+    return crops[torch.arange(len(crops), device=crops.device)[:, None, None], rows[:, :, None], cols[:, None, :]]
 
 
 def mean_std(x):
@@ -185,6 +215,10 @@ def main():
     parser.add_argument("--patience", type=int, default=10,
                         help="stop after this many epochs without val loss improving by --min-delta (0 = never stop early)")
     parser.add_argument("--min-delta", type=float, default=1e-4, help="smallest val loss drop that counts as improving")
+    parser.add_argument("--noise-frac", type=float, default=0.5,
+                        help="fraction of training frames whose previous state gets jittered (0 = no noise)")
+    parser.add_argument("--pos-noise", type=float, default=0.2, help="std of the position jitter, px")
+    parser.add_argument("--vel-noise", type=float, default=0.1, help="std of the velocity jitter, px/tick")
     args = parser.parse_args()
 
     torch.manual_seed(0)
@@ -197,7 +231,7 @@ def main():
 
     load_start = time.perf_counter()
     files = [latest_generated()] if args.latest else find_recordings(args.paths)
-    crops, extra, prev, nxt, n_levels = load_recordings(files)
+    crops, extra, prev, nxt, n_levels = load_recordings(files, margin=NOISE_MARGIN)
     print(f"{len(crops)} frames from {len(files)} recording(s), {n_levels} distinct level(s), "
           f"loaded in {time.perf_counter() - load_start:.1f}s")
 
@@ -212,11 +246,15 @@ def main():
     stats = {"vel_mean": vel_mean, "vel_std": vel_std, "delta_mean": delta_mean, "delta_std": delta_std}
     stats_dev = {k: v.to(device) for k, v in stats.items()}
 
-    def to_batch(batch):
-        level, e, p, n = (t.to(device) for t in batch)
+    def to_batch(batch, noisy=False):
+        big, e, p, n = (t.to(device) for t in batch)
+        # Validation stays clean, so its numbers are comparable to runs without noise
+        p_in = add_noise(p, args.noise_frac, args.pos_noise, args.vel_noise) if noisy and args.noise_frac > 0 else p
+        level = shift_crops(big, p, p_in)
+        e = torch.cat([e[:, :3], (p_in[:, :2] % TILE) / TILE, p_in[:, 2:]], dim=1)
         extra = normalize_extra(e, stats_dev)
-        target = ((n - p) - stats_dev["delta_mean"]) / stats_dev["delta_std"]
-        return level, extra, target, p, n
+        target = ((n - p_in) - stats_dev["delta_mean"]) / stats_dev["delta_std"]
+        return level, extra, target, p_in, n
 
     # drop_last: BatchNorm can't train on a batch of one
     train_loader = DataLoader(train_set, batch_size=args.batch_size, shuffle=True, drop_last=len(train_set) > args.batch_size)
@@ -235,7 +273,7 @@ def main():
         t = time.perf_counter()
         for batch in train_loader:
             # data: fetching the batch from the DataLoader + normalizing / moving it to the device
-            level, extra, target, _, _ = to_batch(batch)
+            level, extra, target, _, _ = to_batch(batch, noisy=True)
             sync()
             data_time += time.perf_counter() - t
             t = time.perf_counter()
@@ -284,7 +322,8 @@ def main():
 
         if val_loss < best_val - args.min_delta:
             best_val, best_epoch = val_loss, epoch
-            torch.save({"model": model.state_dict(), "stats": stats, "hidden_size": args.hidden_size}, args.out)
+            torch.save({"model": model.state_dict(), "stats": stats, "hidden_size": args.hidden_size,
+                        "noise": {"frac": args.noise_frac, "pos": args.pos_noise, "vel": args.vel_noise}}, args.out)
         elif args.patience and epoch - best_epoch >= args.patience:
             print(f"early stop: val loss hasn't improved for {args.patience} epochs")
             break
