@@ -7,7 +7,7 @@ from pathlib import Path
 LEVELS_DIR = Path(__file__).resolve().parents[1] / "levels"
 ART_DIR = Path(__file__).resolve().parents[1] / "art"
 BG_ART_DIR = ART_DIR / "bg"
-MODEL_PATH = Path(__file__).resolve().parent / "noisy_model.pt"
+MODEL_PATH = Path(__file__).resolve().parent / "model_b128_e100_noise2_p30.pt"
 
 # Floor snapping: the network's tiny errors push a standing player a fraction of a px into the floor,
 # which it never saw in training, so it sinks. When on, a predicted position close to resting on solid
@@ -263,6 +263,7 @@ def main():
         right_pressed = keys[pygame.K_RIGHT]
         left_pressed = keys[pygame.K_LEFT]
         up_pressed = keys[pygame.K_UP]
+        reset_pressed = keys[pygame.K_r]
 
         # 4 & 5. Pass inputs, position, and velocity into get_next_frame
         player_pos, player_vel, is_dead, is_finished = get_next_frame(
@@ -275,7 +276,7 @@ def main():
         )
 
         # Handle player death / level reset
-        if is_dead:
+        if is_dead or reset_pressed:
             player_img = load_random_player_art()
             bg_img = load_random_background()
             player_pos = list(start_pos)
