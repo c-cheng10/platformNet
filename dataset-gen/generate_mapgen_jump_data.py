@@ -1,16 +1,4 @@
-"""Pairs on a fixed set of real levels, half starting on the ground and half in the air, mostly jumping.
 
-    python generate_mapgen_jump_data.py [-n COUNT] [--levels NAME ...] [--grounded FRAC] [--jump FRAC]
-                                        [--seed SEED]
-
-Every pair uses one of --levels (default level1, level2, level3, traininglevel_181635,
-traininglevel_181707, traininglevel3, trainlevel1), picked evenly. --grounded of the pairs (default
-50%) start standing exactly on a floor with vy = 0, the rest anywhere in the air; never inside a
-wall, and never touching spikes or the exit. --jump of the pairs (default 75%) hold jump.
-
-Output: generated/<timestamp>-levels-jump.json, minified: {"levels": [text, ...], "pairs": [...]},
-with each pair's LEVEL an index into "levels".
-"""
 import argparse
 import json
 import random
@@ -24,52 +12,97 @@ from platformnet.run import advance
 
 DEFAULT_LEVELS = ("level1", "level2", "level3", "traininglevel_181635", "traininglevel_181707",
                   "traininglevel3", "trainlevel1")
-GROUNDED = 0.5  # share of pairs starting on a floor; the rest start in the air
-JUMP = 0.75  # share of pairs holding jump
+GROUNDED = 0.5   # Share of pairs starting on a floor; the rest start in the air
+JUMP = 0.75      # Share of pairs holding jump
+MAX_MISSES = 100 # Failed placements allowed per level before erroring
+
+
+def load_levels(level_names):
+
+    paths = []
+    levels = []
+    for name in level_names:
+        path = resolve_level(name)
+        text = path.read_text()
+        level = load_level(path)
+
+        paths.append(path)
+        levels.append((text, level))
+    return paths, levels
+
+
+def random_action(rng, jump):
+    # Move left, stay or right; hold jump with probability `jump`
+    move = rng.choice((-1, 0, 1))
+    wants_jump = int(rng.random() < jump)
+    return (move, wants_jump)
 
 
 def generate(count, level_names=DEFAULT_LEVELS, grounded=GROUNDED, jump=JUMP, seed=None):
-    """Returns (level texts, pairs); each pair's LEVEL is an index into the level texts."""
+
     rng = random.Random(seed)
-    paths = [resolve_level(name) for name in level_names]
-    levels = [(p.read_text(), load_level(p)) for p in paths]
+
+    paths, levels = load_levels(level_names)
+
     pairs = []
     misses = [0] * len(levels)
+
     while len(pairs) < count:
+
+        # Every level is equally likely
         index = rng.randrange(len(levels))
         level = levels[index][1]
+
         if rng.random() < grounded:
             state = random_grounded_state(level, rng)
         else:
             state = random_air_state(level, rng)
-        if state is None:  # no valid spot found this time (rare); draw again
+
+        # No valid spot found this time (rare); draw again
+        if state is None:
             misses[index] += 1
-            if misses[index] > 100:
+            if misses[index] > MAX_MISSES:
                 raise ValueError(f"no valid start position found in {paths[index]}")
             continue
+
         assert not level.overlaps(state, SOLID), "start state inside a wall"
-        action = (rng.choice((-1, 0, 1)), int(rng.random() < jump))
+
+        action = random_action(rng, jump)
         _, dead, new_state, finished = advance(state, action, level)
         pairs.append(make_pair(index, state, action, new_state, dead, finished))
-    return [text for text, _ in levels], pairs
+
+    level_texts = [text for text, _ in levels]
+    return level_texts, pairs
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("-n", "--count", type=int, default=250000, help="number of pairs (default 250000)")
-    parser.add_argument("--levels", nargs="+", default=list(DEFAULT_LEVELS),
-                        help="levels to use, picked evenly (default: " + " ".join(DEFAULT_LEVELS) + ")")
-    parser.add_argument("--grounded", type=float, default=GROUNDED,
-                        help=f"fraction starting on a floor, the rest in the air (default {GROUNDED})")
-    parser.add_argument("--jump", type=float, default=JUMP, help=f"fraction holding jump (default {JUMP})")
-    parser.add_argument("--seed", type=int, help="random seed, for repeatable output")
-    args = parser.parse_args()
-    for name in ("grounded", "jump"):
-        if not 0 <= getattr(args, name) <= 1:
-            parser.error(f"--{name} must be between 0 and 1")
-
-    levels, pairs = generate(args.count, args.levels, args.grounded, args.jump, args.seed)
+def save(levels, pairs):
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
     path = GENERATED_DIR / f"{time.strftime('%Y%m%d-%H%M%S')}-levels-jump.json"
     path.write_text(json.dumps({"levels": levels, "pairs": pairs}, separators=(",", ":")))
+    return path
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Pairs on a fixed set of real levels, half starting on the ground and half in the air, mostly jumping.")
+    parser.add_argument("-n", "--count", type=int, default=250000, help="Number of pairs (default 250000)")
+    parser.add_argument("--levels", nargs="+", default=list(DEFAULT_LEVELS),
+                        help="Levels to use, picked evenly (default: " + " ".join(DEFAULT_LEVELS) + ")")
+    parser.add_argument("--grounded", type=float, default=GROUNDED,
+                        help=f"Fraction starting on a floor, the rest in the air (default {GROUNDED})")
+    parser.add_argument("--jump", type=float, default=JUMP, help=f"Fraction holding jump (default {JUMP})")
+    parser.add_argument("--seed", type=int, help="Random seed for repeatable output")
+    args = parser.parse_args()
+
+    if not 0 <= args.grounded <= 1:
+        parser.error("--grounded must be between 0 and 1")
+    if not 0 <= args.jump <= 1:
+        parser.error("--jump must be between 0 and 1")
+    return args
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    levels, pairs = generate(args.count, args.levels, args.grounded, args.jump, args.seed)
+    path = save(levels, pairs)
     print(f"Generated {len(pairs)} pairs on {len(levels)} levels to {path}")

@@ -208,7 +208,6 @@ def random_grounded_state(level, rng):
             return state
     return None
 
-
 def generate(count, level_path=None, level_share=0.4, maps=100, grounded=0.5, seed=None):
    
     rng = random.Random(seed)
