@@ -6,3 +6,8 @@ __pycache__/
 *.pyc
 .pytest_cache/
 dataset-gen/generated/
+
+# generated data and recordings
+*.json
+*.json.gz
+!.vscode/*.json
