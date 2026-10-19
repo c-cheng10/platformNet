@@ -82,6 +82,7 @@ learnable.
 All constants are in `game_py/platformnet/physics.py`. Changing any of them makes existing data and models out of date.
 
 ## Data and training
+https://huggingface.co/datasets/Kenzo-A-T/platformNetData is the final dataset used to train the model in use
 
 ```bat
 cd dataset-gen
